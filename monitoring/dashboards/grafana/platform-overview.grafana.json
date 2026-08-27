@@ -1,6 +1,6 @@
 {
   "title": "DBRE Platform Overview",
-  "description": "Availability, latency, capacity, and recovery signals for one PostgreSQL environment.",
+  "description": "Availability, latency, capacity, and recovery signals for one Postgres environment.",
   "schemaVersion": 39,
   "tags": [
     "dbre-platform",
