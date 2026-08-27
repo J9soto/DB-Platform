@@ -57,7 +57,7 @@ commands and will fail the same way locally as it does there.
   math, capacity forecasting) get unit tests with real numeric
   assertions, not just "it doesn't raise." Anything that talks to a real
   PostgreSQL server should follow the pattern in
-  `tests/unit/test_local_backup.py`: skip (don't fail) when no server is
+  `tests/integration/test_local_backup.py`: skip (don't fail) when no server is
   reachable, gated by `DBRE_TEST_PG_*` environment variables.
 
 ## Adding a new policy rule
@@ -67,7 +67,7 @@ commands and will fail the same way locally as it does there.
    area like `policies/tagging.yaml`).
 2. Add or update a fixture in `examples/requests/` if the rule changes
    what "compliant" looks like.
-3. Add a test case to `tests/unit/test_policy_engine.py` proving both the
+3. Add a test case to `tests/policy/test_policy_engine.py` proving both the
    pass and fail paths.
 4. Run `make validate-examples` to confirm the example requests still
    validate the way their comments claim they do.

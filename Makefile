@@ -12,11 +12,11 @@ install: ## Install the platform (runtime dependencies only)
 install-dev: ## Install the platform with dev tooling (pytest, ruff, mypy, bandit)
 	$(PYTHON) -m pip install -e ".[dev]" --break-system-packages
 
-test: ## Run the unit test suite (stdlib unittest; also pytest-compatible)
-	$(PYTHON) -m unittest discover -s tests/unit -v
+test: ## Run all tests: unit, policy, and integration (stdlib unittest; also pytest-compatible)
+	$(PYTHON) -m unittest discover -s tests -v
 
 test-cov: ## Run tests under coverage (requires pytest + pytest-cov)
-	pytest tests/unit --cov=dbre_platform --cov-report=term-missing
+	pytest tests --cov=dbre_platform --cov-report=term-missing
 
 lint: ## Lint with ruff
 	ruff check src/ tests/ automation/

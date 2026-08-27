@@ -2,6 +2,44 @@
 
 ## The request lifecycle
 
+```mermaid
+flowchart TD
+    Dev["Developer"] -->|"writes a YAML request"| CLI["DBRE CLI\ndbre request validate / provision"]
+    CLI --> Schema["Schema validation\ndbre_platform.config"]
+    Schema -->|structurally invalid| Reject1["Rejected -- fix the request file"]
+    Schema -->|valid| Policy["Policy Validation Engine\ndbre_platform.policy"]
+    Policy -->|"any ERROR-severity rule fails"| Reject2["PROVISIONING REFUSED\nPolicyViolationError"]
+    Policy -->|passes| Readiness["Operational Readiness Scorecard\ndbre_platform.readiness"]
+    Readiness -->|"score < environment threshold"| Reject3["PROVISIONING REFUSED\nReadinessError"]
+    Readiness -->|passes| Mode{"spec.platform"}
+    Mode -->|local| Docker["LocalDockerProvisioner\ndocker compose + PostgreSQL container"]
+    Mode -->|aws| Terraform["AwsRdsProvisioner\nterraform apply"]
+    Terraform --> RDS["AWS RDS PostgreSQL\nSecrets Manager, security group,\nparameter group, CloudWatch alarms"]
+    Docker --> PG["PostgreSQL"]
+    RDS --> PG
+    PG --> Standards["Postgres standards + RBAC\ndbre_platform.postgres"]
+    Standards --> Obs["Observability\ndbre_platform.observability"]
+    Obs --> SLO["SLOs, error budgets, burn rate\ndbre_platform.slo"]
+    SLO --> OpReady["Ongoing operational readiness\ncapacity forecasting, backup/DR drills"]
+
+    Audit[("Audit log\nhash-chained, tamper-evident")]
+    CLI -.->|every action| Audit
+    Policy -.-> Audit
+    Docker -.-> Audit
+    Terraform -.-> Audit
+
+    style Reject1 fill:#5a1f1f,stroke:#c0392b,color:#fff
+    style Reject2 fill:#5a1f1f,stroke:#c0392b,color:#fff
+    style Reject3 fill:#5a1f1f,stroke:#c0392b,color:#fff
+    style Audit fill:#1f3a5a,stroke:#2980b9,color:#fff
+```
+
+Every request passes through the same three gates (schema, policy,
+readiness) before either provisioner runs, and every step that changes
+state writes to the same tamper-evident audit log regardless of which
+path was taken. The detailed text version below spells out exactly which
+module and function owns each step.
+
 ```
  Developer                                                                                 
      |                                                                                      

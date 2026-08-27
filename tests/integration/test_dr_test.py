@@ -3,7 +3,7 @@
 Failure-path tests need no live database (bad credentials fail fast).
 The full-cycle success test needs a real, reachable PostgreSQL server and
 is skipped (not failed) when one isn't available -- see
-tests/unit/test_local_backup.py for the same pattern and the env vars
+tests/integration/test_local_backup.py for the same pattern and the env vars
 that point it at a specific server.
 """
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from dbre_platform.backup.dr_test import run_dr_test
 from dbre_platform.backup.local_backup import LocalBackupManager
 from dbre_platform.postgres.executor import ConnectionParams
-from tests.unit.test_local_backup import _candidate_connection_params, _live_server_reachable
+from tests.integration.test_local_backup import _candidate_connection_params, _live_server_reachable
 
 
 class TestDrTestFailurePaths(unittest.TestCase):
