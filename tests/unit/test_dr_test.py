@@ -17,7 +17,6 @@ from pathlib import Path
 from dbre_platform.backup.dr_test import run_dr_test
 from dbre_platform.backup.local_backup import LocalBackupManager
 from dbre_platform.postgres.executor import ConnectionParams
-
 from tests.unit.test_local_backup import _candidate_connection_params, _live_server_reachable
 
 

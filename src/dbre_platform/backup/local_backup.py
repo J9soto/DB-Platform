@@ -57,7 +57,7 @@ class BackupMetadata:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
     @classmethod
-    def from_json(cls, text: str) -> "BackupMetadata":
+    def from_json(cls, text: str) -> BackupMetadata:
         return cls(**json.loads(text))
 
 
@@ -94,20 +94,27 @@ class LocalBackupManager:
 
         args = [
             "pg_dump",
-            "--host", params.host,
-            "--port", str(params.port),
-            "--username", params.user,
-            "--dbname", params.dbname,
+            "--host",
+            params.host,
+            "--port",
+            str(params.port),
+            "--username",
+            params.user,
+            "--dbname",
+            params.dbname,
             "--format=custom",
             "--no-password",
-            "--file", str(dump_path),
+            "--file",
+            str(dump_path),
         ]
         try:
             completed = subprocess.run(
                 args, env=self._env(params), capture_output=True, text=True, timeout=self.timeout_seconds
             )
         except FileNotFoundError as exc:
-            raise BackupError("`pg_dump` was not found on PATH. Install the PostgreSQL client tools.") from exc
+            raise BackupError(
+                "`pg_dump` was not found on PATH. Install the PostgreSQL client tools."
+            ) from exc
         except subprocess.TimeoutExpired as exc:
             dump_path.unlink(missing_ok=True)
             raise BackupError(f"pg_dump timed out after {self.timeout_seconds}s") from exc
@@ -169,10 +176,14 @@ class LocalBackupManager:
 
         args = [
             "pg_restore",
-            "--host", params.host,
-            "--port", str(params.port),
-            "--username", params.user,
-            "--dbname", params.dbname,
+            "--host",
+            params.host,
+            "--port",
+            str(params.port),
+            "--username",
+            params.user,
+            "--dbname",
+            params.dbname,
             "--no-password",
             "--no-owner",
             "--no-privileges",

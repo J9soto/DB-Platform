@@ -1,0 +1,31 @@
+# A production request that is schema-valid but fails nearly every
+# production policy rule -- kept here deliberately as a worked example of
+# what "policy validation engine rejects the request" looks like end to
+# end. Run it and read the violation report; then compare against
+# prod-app-compliant.yaml to see exactly what's different.
+#
+# Try it:
+#   dbre request validate examples/requests/prod-app-noncompliant.yaml
+#   # exits 1, and lists every violated rule_id
+#   dbre request provision examples/requests/prod-app-noncompliant.yaml
+#   # PROVISIONING REFUSED -- policy is a gate, not a suggestion
+apiVersion: dbre.platform/v1
+kind: DatabaseRequest
+metadata:
+  name: risky-app
+  environment: prod
+  owner: someone
+  cost_center: CC-9
+  data_classification: restricted
+spec:
+  platform: local # policy requires platform == aws in prod
+  storage_gb: 20 # policy requires >= 100
+  multi_az: false # policy requires true
+  backup_retention_days: 3 # policy requires >= 30
+  deletion_protection: false # policy requires true
+  enhanced_monitoring: false # policy requires true
+  extensions:
+    - pg_stat_statements # missing pgaudit, required for restricted data and for prod
+  approvals: [] # policy requires >= 1
+  slo:
+    availability_target: 0.95 # policy requires >= 0.999

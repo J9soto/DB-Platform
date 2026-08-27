@@ -1,0 +1,264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$defs": {
+    "Approval": {
+      "additionalProperties": false,
+      "description": "A recorded approval, required by policy for production requests.",
+      "properties": {
+        "approver": {
+          "description": "Approver's name or identity.",
+          "minLength": 1,
+          "title": "Approver",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "Change/approval ticket reference.",
+          "minLength": 1,
+          "title": "Ticket",
+          "type": "string"
+        },
+        "approved_at": {
+          "description": "ISO-8601 date the approval was granted.",
+          "title": "Approved At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approver",
+        "ticket",
+        "approved_at"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "DatabaseSpec": {
+      "additionalProperties": false,
+      "description": "The desired-state specification for the database environment.",
+      "properties": {
+        "platform": {
+          "default": "local",
+          "description": "'local' (Docker) or 'aws' (RDS via Terraform).",
+          "enum": [
+            "local",
+            "aws"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "engine": {
+          "const": "postgres",
+          "default": "postgres",
+          "title": "Engine",
+          "type": "string"
+        },
+        "engine_version": {
+          "default": "16",
+          "description": "Major PostgreSQL version.",
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "instance_class": {
+          "default": "db.t4g.micro",
+          "description": "AWS RDS instance class. Ignored in local mode.",
+          "title": "Instance Class",
+          "type": "string"
+        },
+        "storage_gb": {
+          "default": 20,
+          "maximum": 65536,
+          "minimum": 20,
+          "title": "Storage Gb",
+          "type": "integer"
+        },
+        "multi_az": {
+          "default": false,
+          "description": "AWS Multi-AZ standby. Required by policy in prod.",
+          "title": "Multi Az",
+          "type": "boolean"
+        },
+        "backup_retention_days": {
+          "default": 7,
+          "maximum": 35,
+          "minimum": 0,
+          "title": "Backup Retention Days",
+          "type": "integer"
+        },
+        "deletion_protection": {
+          "default": false,
+          "title": "Deletion Protection",
+          "type": "boolean"
+        },
+        "enhanced_monitoring": {
+          "default": false,
+          "description": "1-minute OS-level metrics (AWS).",
+          "title": "Enhanced Monitoring",
+          "type": "boolean"
+        },
+        "connection_limit": {
+          "default": 100,
+          "description": "Max total connections.",
+          "maximum": 5000,
+          "minimum": 5,
+          "title": "Connection Limit",
+          "type": "integer"
+        },
+        "statement_timeout_ms": {
+          "default": 30000,
+          "description": "Per-statement timeout.",
+          "minimum": 1000,
+          "title": "Statement Timeout Ms",
+          "type": "integer"
+        },
+        "idle_in_transaction_timeout_ms": {
+          "default": 60000,
+          "description": "Kill sessions idling inside a transaction.",
+          "minimum": 1000,
+          "title": "Idle In Transaction Timeout Ms",
+          "type": "integer"
+        },
+        "extensions": {
+          "description": "PostgreSQL extensions to enable.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Additional tags beyond the platform-enforced set.",
+          "title": "Tags",
+          "type": "object"
+        },
+        "approvals": {
+          "items": {
+            "$ref": "#/$defs/Approval"
+          },
+          "title": "Approvals",
+          "type": "array"
+        },
+        "slo": {
+          "$ref": "#/$defs/SLOTargets"
+        }
+      },
+      "title": "DatabaseSpec",
+      "type": "object"
+    },
+    "RequestMetadata": {
+      "additionalProperties": false,
+      "description": "Identity and ownership information for the request.",
+      "properties": {
+        "name": {
+          "description": "Database/application identifier, e.g. 'orders-api'.",
+          "title": "Name",
+          "type": "string"
+        },
+        "environment": {
+          "enum": [
+            "dev",
+            "staging",
+            "prod"
+          ],
+          "title": "Environment",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Team or individual accountable for this database.",
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "cost_center": {
+          "minLength": 1,
+          "title": "Cost Center",
+          "type": "string"
+        },
+        "data_classification": {
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ],
+          "title": "Data Classification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "environment",
+        "owner",
+        "cost_center",
+        "data_classification"
+      ],
+      "title": "RequestMetadata",
+      "type": "object"
+    },
+    "SLOTargets": {
+      "additionalProperties": false,
+      "description": "Service level objectives the platform will track for this database.\n\nDefaults are intentionally conservative placeholders; real targets are\nalmost always dictated by environment policy (see policies/environments/\n*.yaml) rather than by individual developers, which is why the policy\nengine is allowed to override these -- a developer can *request* a\ntighter SLO than their environment's floor, never a looser one.",
+      "properties": {
+        "availability_target": {
+          "default": 0.995,
+          "description": "e.g. 0.999 = 99.9%.",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Availability Target",
+          "type": "number"
+        },
+        "latency_p99_ms": {
+          "default": 200,
+          "description": "p99 query latency target, ms.",
+          "exclusiveMinimum": 0,
+          "title": "Latency P99 Ms",
+          "type": "integer"
+        },
+        "backup_rpo_hours": {
+          "default": 24.0,
+          "description": "Max acceptable data loss window.",
+          "exclusiveMinimum": 0,
+          "title": "Backup Rpo Hours",
+          "type": "number"
+        },
+        "recovery_rto_hours": {
+          "default": 4.0,
+          "description": "Max acceptable time to restore service.",
+          "exclusiveMinimum": 0,
+          "title": "Recovery Rto Hours",
+          "type": "number"
+        }
+      },
+      "title": "SLOTargets",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A complete, self-service database request document.\n\nExample (see examples/requests/*.yaml for full, runnable samples)::\n\n    apiVersion: dbre.platform/v1\n    kind: DatabaseRequest\n    metadata:\n      name: orders-api\n      environment: prod\n      owner: payments-team\n      cost_center: CC-4471\n      data_classification: confidential\n    spec:\n      platform: aws\n      multi_az: true\n      backup_retention_days: 30\n      deletion_protection: true",
+  "properties": {
+    "apiVersion": {
+      "const": "dbre.platform/v1",
+      "default": "dbre.platform/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "DatabaseRequest",
+      "default": "DatabaseRequest",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/RequestMetadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/DatabaseSpec"
+    }
+  },
+  "required": [
+    "metadata"
+  ],
+  "title": "DatabaseRequest",
+  "type": "object"
+}

@@ -37,9 +37,17 @@ class TestBuildTfvars(unittest.TestCase):
     def test_carries_required_terraform_variables(self):
         tfvars = build_tfvars(make_request())
         for key in (
-            "name", "engine_version", "instance_class", "allocated_storage_gb",
-            "backup_retention_days", "connection_limit", "cluster_parameters",
-            "tags", "multi_az", "deletion_protection", "enhanced_monitoring",
+            "name",
+            "engine_version",
+            "instance_class",
+            "allocated_storage_gb",
+            "backup_retention_days",
+            "connection_limit",
+            "cluster_parameters",
+            "tags",
+            "multi_az",
+            "deletion_protection",
+            "enhanced_monitoring",
         ):
             self.assertIn(key, tfvars)
 

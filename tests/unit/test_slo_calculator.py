@@ -133,9 +133,7 @@ class TestAssessSlo(unittest.TestCase):
     def test_no_metrics_assesses_nothing(self):
         report = assess_slo(make_request(), MetricsSnapshot())
         self.assertEqual(report.statuses, [])
-        self.assertEqual(
-            set(report.not_assessed), {"availability", "latency", "backup", "recovery"}
-        )
+        self.assertEqual(set(report.not_assessed), {"availability", "latency", "backup", "recovery"})
         self.assertTrue(report.healthy)  # nothing assessed => nothing unhealthy
 
     def test_healthy_request_reports_healthy(self):

@@ -46,7 +46,7 @@ where = ["src"]
 dbre_platform = ["postgres/templates/*.sql.j2"]
 
 [tool.ruff]
-line-length = 100
+line-length = 110
 target-version = "py310"
 
 [tool.ruff.lint]
@@ -57,6 +57,10 @@ python_version = "3.10"
 ignore_missing_imports = true
 disallow_untyped_defs = false
 warn_unused_ignores = true
+# types-PyYAML (an optional [dev] dependency) provides real stubs; when it
+# isn't installed, suppress the resulting import-untyped noise rather than
+# letting one missing stub package fail CI for a well-known, stable library.
+disable_error_code = ["import-untyped"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

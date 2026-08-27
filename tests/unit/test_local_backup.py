@@ -164,9 +164,7 @@ class TestLiveBackupRestore(unittest.TestCase):
         source.run_sql(f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);')
         create_result = source.run_sql(f'CREATE DATABASE "{restore_dbname}";')
         self.assertTrue(create_result.success)
-        self.addCleanup(
-            lambda: source.run_sql(f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);')
-        )
+        self.addCleanup(lambda: source.run_sql(f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);'))
 
         restore_params = ConnectionParams(
             host=self.params.host,

@@ -1,0 +1,26 @@
+# Staging: closer to production than dev.yaml allows, but not the full
+# production bar. policies/environments/staging.yaml requires >=7 days of
+# backup retention and the pgaudit extension, and recommends (warns if
+# absent) enhanced monitoring.
+#
+# Try it:
+#   dbre request validate examples/requests/staging-app.yaml
+apiVersion: dbre.platform/v1
+kind: DatabaseRequest
+metadata:
+  name: catalog-api
+  environment: staging
+  owner: catalog-team
+  cost_center: CC-1001
+  data_classification: internal
+spec:
+  platform: aws
+  instance_class: db.t4g.small
+  storage_gb: 50
+  backup_retention_days: 7
+  extensions:
+    - pg_stat_statements
+    - pgaudit
+  slo:
+    availability_target: 0.99
+    latency_p99_ms: 250

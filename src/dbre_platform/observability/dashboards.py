@@ -54,50 +54,100 @@ class Dashboard:
 
 PLATFORM_OVERVIEW_DASHBOARD = Dashboard(
     name="DBRE Platform Overview",
-    description="Availability, latency, capacity, and recovery signals for one PostgreSQL environment.",
+    description="Availability, latency, capacity, and recovery signals for one Postgres environment.",
     panels=[
         Panel(
-            "Connection saturation", "availability", "connection_saturation", "gauge", "%",
-            cloudwatch_metric={"namespace": "AWS/RDS", "metric_name": "DatabaseConnections", "stat": "Average"},
+            "Connection saturation",
+            "availability",
+            "connection_saturation",
+            "gauge",
+            "%",
+            cloudwatch_metric={
+                "namespace": "AWS/RDS",
+                "metric_name": "DatabaseConnections",
+                "stat": "Average",
+            },
         ),
         Panel(
-            "Connections by state", "availability", "connections_by_state", "table",
+            "Connections by state",
+            "availability",
+            "connections_by_state",
+            "table",
         ),
         Panel(
-            "CPU utilization", "availability", "connection_saturation", "timeseries", "%",
+            "CPU utilization",
+            "availability",
+            "connection_saturation",
+            "timeseries",
+            "%",
             cloudwatch_metric={"namespace": "AWS/RDS", "metric_name": "CPUUtilization", "stat": "Average"},
         ),
         Panel(
-            "Long-running queries", "latency", "long_running_queries", "table",
+            "Long-running queries",
+            "latency",
+            "long_running_queries",
+            "table",
         ),
         Panel(
-            "Blocking locks", "latency", "blocking_locks", "table",
+            "Blocking locks",
+            "latency",
+            "blocking_locks",
+            "table",
         ),
         Panel(
-            "Top queries by total time", "latency", "top_queries_by_total_time", "table", "ms",
+            "Top queries by total time",
+            "latency",
+            "top_queries_by_total_time",
+            "table",
+            "ms",
         ),
         Panel(
-            "Cache hit ratio", "latency", "cache_hit_ratio", "stat", "ratio",
+            "Cache hit ratio",
+            "latency",
+            "cache_hit_ratio",
+            "stat",
+            "ratio",
         ),
         Panel(
-            "Read/write latency", "latency", "cache_hit_ratio", "timeseries", "ms",
+            "Read/write latency",
+            "latency",
+            "cache_hit_ratio",
+            "timeseries",
+            "ms",
             cloudwatch_metric={"namespace": "AWS/RDS", "metric_name": "ReadLatency", "stat": "Average"},
         ),
         Panel(
-            "Database size", "capacity", "database_size", "timeseries", "bytes",
+            "Database size",
+            "capacity",
+            "database_size",
+            "timeseries",
+            "bytes",
             cloudwatch_metric={"namespace": "AWS/RDS", "metric_name": "FreeStorageSpace", "stat": "Average"},
         ),
         Panel(
-            "Largest tables / bloat estimate", "capacity", "table_sizes_and_bloat_estimate", "table",
+            "Largest tables / bloat estimate",
+            "capacity",
+            "table_sizes_and_bloat_estimate",
+            "table",
         ),
         Panel(
-            "Index usage", "capacity", "index_usage", "table",
+            "Index usage",
+            "capacity",
+            "index_usage",
+            "table",
         ),
         Panel(
-            "Autovacuum health", "capacity", "autovacuum_health", "table",
+            "Autovacuum health",
+            "capacity",
+            "autovacuum_health",
+            "table",
         ),
         Panel(
-            "Replication lag", "recovery", "replication_lag", "timeseries", "s",
+            "Replication lag",
+            "recovery",
+            "replication_lag",
+            "timeseries",
+            "s",
             cloudwatch_metric={"namespace": "AWS/RDS", "metric_name": "ReplicaLag", "stat": "Average"},
         ),
     ],
@@ -147,12 +197,20 @@ def to_cloudwatch_dashboard_json(dashboard: Dashboard, *, db_instance_id: str = 
             widgets.append(
                 {
                     "type": "metric",
-                    "x": 0, "y": y, "width": 12, "height": 6,
+                    "x": 0,
+                    "y": y,
+                    "width": 12,
+                    "height": 6,
                     "properties": {
                         "title": panel.title,
                         "view": "timeSeries",
                         "metrics": [
-                            [metric["namespace"], metric["metric_name"], "DBInstanceIdentifier", db_instance_id]
+                            [
+                                metric["namespace"],
+                                metric["metric_name"],
+                                "DBInstanceIdentifier",
+                                db_instance_id,
+                            ]
                         ],
                         "stat": metric["stat"],
                         "period": 300,
@@ -164,7 +222,10 @@ def to_cloudwatch_dashboard_json(dashboard: Dashboard, *, db_instance_id: str = 
             widgets.append(
                 {
                     "type": "text",
-                    "x": 0, "y": y, "width": 12, "height": 2,
+                    "x": 0,
+                    "y": y,
+                    "width": 12,
+                    "height": 2,
                     "properties": {
                         "markdown": (
                             f"**{panel.title}** is not available as a native CloudWatch metric "

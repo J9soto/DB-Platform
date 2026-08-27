@@ -100,9 +100,7 @@ def linear_regression(points: list[CapacityDataPoint]) -> tuple[float, float]:
     denominator = sum((p.day_offset - mean_x) ** 2 for p in points)
 
     if denominator == 0:
-        raise CapacityDataError(
-            "all historical data points have the same day_offset -- cannot fit a trend"
-        )
+        raise CapacityDataError("all historical data points have the same day_offset -- cannot fit a trend")
 
     slope = numerator / denominator
     intercept = mean_y - slope * mean_x
@@ -122,8 +120,10 @@ def classify_risk(
     if utilization_fraction >= 0.90:
         return "critical"
     if utilization_fraction >= 0.75:
-        return "warning" if projected_exhaustion_days is None else (
-            "critical" if projected_exhaustion_days <= critical_days else "warning"
+        return (
+            "warning"
+            if projected_exhaustion_days is None
+            else ("critical" if projected_exhaustion_days <= critical_days else "warning")
         )
     if projected_exhaustion_days is None:
         return "ok"
@@ -163,9 +163,7 @@ def forecast_capacity(
         # spiked then was cleaned up) -- report it as "now", not negative.
         projected_exhaustion_days = max(0.0, days_from_latest)
 
-    risk_level = classify_risk(
-        projected_exhaustion_days, utilization_fraction, critical_days, warning_days
-    )
+    risk_level = classify_risk(projected_exhaustion_days, utilization_fraction, critical_days, warning_days)
 
     return CapacityForecast(
         resource=resource,
@@ -197,9 +195,7 @@ def load_history_csv(path: str | Path) -> list[CapacityDataPoint]:
     with path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None or {"date", "value"} - set(reader.fieldnames):
-            raise CapacityDataError(
-                f"{path} must have 'date' and 'value' columns, got {reader.fieldnames}"
-            )
+            raise CapacityDataError(f"{path} must have 'date' and 'value' columns, got {reader.fieldnames}")
         for line_no, row in enumerate(reader, start=2):
             try:
                 parsed_date = date.fromisoformat(row["date"].strip())

@@ -28,7 +28,7 @@ from dbre_platform.config.models import DatabaseRequest
 from dbre_platform.exceptions import ProvisioningError
 from dbre_platform.logging_config import get_logger
 from dbre_platform.postgres.standards import build_cluster_parameters
-from dbre_platform.provisioning.base import ProvisionResult, Provisioner
+from dbre_platform.provisioning.base import Provisioner, ProvisionResult
 from dbre_platform.tagging.governance import resolve_tags
 
 logger = get_logger("provisioning.aws_rds")
@@ -72,7 +72,9 @@ class AwsRdsProvisioner(Provisioner):
     in each environment directory.
     """
 
-    def __init__(self, *, terraform_root: Path = DEFAULT_TERRAFORM_ROOT, auto_approve: bool = False, **kwargs) -> None:
+    def __init__(
+        self, *, terraform_root: Path = DEFAULT_TERRAFORM_ROOT, auto_approve: bool = False, **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.terraform_root = terraform_root
         self.auto_approve = auto_approve

@@ -14,6 +14,7 @@ engine before doing anything else.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +39,7 @@ class PolicyEngine:
 
     # -- loading ----------------------------------------------------------
 
-    def load(self) -> "PolicyEngine":
+    def load(self) -> PolicyEngine:
         """Load every policy file under ``policy_dir``. Idempotent."""
         if self._loaded:
             return self
@@ -114,10 +115,9 @@ class PolicyEngine:
             satisfied = evaluate_operator(operator, actual, expected)
 
             if not satisfied:
-                try:
+                # message had no substitutable placeholders (or bad ones) - use as-is
+                with contextlib.suppress(KeyError, IndexError, ValueError):
                     message = message.format(actual=actual, expected=expected, field=field_path)
-                except (KeyError, IndexError, ValueError):
-                    pass  # message had no substitutable placeholders (or bad ones) - use as-is
                 violation = Violation(
                     rule_id=rule_id,
                     field=field_path,

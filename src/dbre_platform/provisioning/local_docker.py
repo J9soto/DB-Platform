@@ -36,7 +36,7 @@ from dbre_platform.postgres.standards import (
     render_database_settings_sql,
     render_extension_statements,
 )
-from dbre_platform.provisioning.base import ProvisionResult, Provisioner
+from dbre_platform.provisioning.base import Provisioner, ProvisionResult
 
 logger = get_logger("provisioning.local_docker")
 
@@ -89,11 +89,17 @@ class LocalDockerProvisioner(Provisioner):
             )
         env_file = SUPERUSER_ENV_FILE
         cmd = [
-            "docker", "compose",
-            "--env-file", str(env_file),
-            "-f", str(self.compose_file),
-            "-f", str(OVERRIDE_FILE),
-            "up", "-d", "postgres",
+            "docker",
+            "compose",
+            "--env-file",
+            str(env_file),
+            "-f",
+            str(self.compose_file),
+            "-f",
+            str(OVERRIDE_FILE),
+            "up",
+            "-d",
+            "postgres",
         ]
         logger.info("starting local postgres container", extra={"command": " ".join(cmd)})
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -120,9 +126,7 @@ class LocalDockerProvisioner(Provisioner):
     # -- bootstrap -------------------------------------------------------
 
     def _create_database_if_missing(self, admin_executor: PsqlExecutor, db_name: str) -> None:
-        exists = admin_executor.run_sql(
-            f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"
-        )
+        exists = admin_executor.run_sql(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';")
         if "1 row" not in exists.stdout and "(1 row)" not in exists.stdout:
             create_result = admin_executor.run_sql(f'CREATE DATABASE "{db_name}";')
             if not create_result.success:

@@ -69,7 +69,10 @@ QUERY_LIBRARY: list[ObservabilityQuery] = [
     ObservabilityQuery(
         name="blocking_locks",
         category="latency",
-        description="Sessions that are blocked, and who is blocking them -- the first query to run during a 'everything is slow' incident.",
+        description=(
+            "Sessions that are blocked, and who is blocking them -- the first query "
+            "to run during a 'everything is slow' incident."
+        ),
         sql="""
             SELECT
                 blocked.pid AS blocked_pid,
@@ -109,7 +112,10 @@ QUERY_LIBRARY: list[ObservabilityQuery] = [
     ObservabilityQuery(
         name="cache_hit_ratio",
         category="latency",
-        description="Buffer cache hit ratio -- sustained values below ~0.99 usually mean shared_buffers is too small for the working set.",
+        description=(
+            "Buffer cache hit ratio -- sustained values below ~0.99 usually mean "
+            "shared_buffers is too small for the working set."
+        ),
         sql="""
             SELECT
                 sum(heap_blks_hit) AS heap_hit,
@@ -163,7 +169,10 @@ QUERY_LIBRARY: list[ObservabilityQuery] = [
     ObservabilityQuery(
         name="replication_lag",
         category="recovery",
-        description="Replica lag in bytes and seconds, run on the primary. Empty result means no replicas attached (expected for a standalone local demo instance).",
+        description=(
+            "Replica lag in bytes and seconds, run on the primary. Empty result means "
+            "no replicas attached (expected for a standalone local demo instance)."
+        ),
         sql="""
             SELECT
                 application_name,
@@ -176,7 +185,10 @@ QUERY_LIBRARY: list[ObservabilityQuery] = [
     ObservabilityQuery(
         name="autovacuum_health",
         category="capacity",
-        description="Tables overdue for autovacuum relative to their dead-tuple ratio -- a leading indicator of both bloat and transaction-ID wraparound risk.",
+        description=(
+            "Tables overdue for autovacuum relative to their dead-tuple ratio -- a leading "
+            "indicator of both bloat and transaction-ID wraparound risk."
+        ),
         sql="""
             SELECT
                 relname AS table_name,

@@ -1,0 +1,20 @@
+# A minimal dev-environment request. Dev policy (policies/environments/dev.yaml)
+# is deliberately lenient -- fast iteration matters more than production
+# guardrails here -- so most of spec is left at schema defaults.
+#
+# Try it:
+#   dbre request validate examples/requests/dev-app.yaml
+#   dbre request provision examples/requests/dev-app.yaml
+apiVersion: dbre.platform/v1
+kind: DatabaseRequest
+metadata:
+  name: catalog-api
+  environment: dev
+  owner: catalog-team
+  cost_center: CC-1001
+  data_classification: internal
+spec:
+  platform: local
+  storage_gb: 20
+  extensions:
+    - pg_stat_statements

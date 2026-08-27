@@ -99,9 +99,7 @@ def render_roles_sql(request: DatabaseRequest, credentials: RoleCredentials) -> 
     db_name = request.metadata.name.replace("-", "_")
     app_name = request.metadata.name.replace("-", "_")
 
-    set_lines = [
-        f"\\set {suffix}_password '{credentials.passwords[suffix]}'" for suffix in ROLE_SUFFIXES
-    ]
+    set_lines = [f"\\set {suffix}_password '{credentials.passwords[suffix]}'" for suffix in ROLE_SUFFIXES]
 
     template = _env.get_template("roles.sql.j2")
     body = template.render(

@@ -32,7 +32,7 @@ class ConnectionParams:
     sslmode: str = "prefer"
 
     @classmethod
-    def from_env(cls, *, dbname: str = "postgres") -> "ConnectionParams":
+    def from_env(cls, *, dbname: str = "postgres") -> ConnectionParams:
         """Build connection parameters from DBRE_PG_* environment variables.
 
         This is the only supported way to supply credentials to the
@@ -76,11 +76,16 @@ class PsqlExecutor:
     def _base_args(self) -> list[str]:
         return [
             "psql",
-            "--host", self.params.host,
-            "--port", str(self.params.port),
-            "--username", self.params.user,
-            "--dbname", self.params.dbname,
-            "--set", "ON_ERROR_STOP=1",
+            "--host",
+            self.params.host,
+            "--port",
+            str(self.params.port),
+            "--username",
+            self.params.user,
+            "--dbname",
+            self.params.dbname,
+            "--set",
+            "ON_ERROR_STOP=1",
             "--no-psqlrc",
             "--quiet",
         ]
@@ -101,9 +106,7 @@ class PsqlExecutor:
                 timeout=self.timeout_seconds,
             )
         except FileNotFoundError as exc:
-            raise ExecutorError(
-                "`psql` was not found on PATH. Install the PostgreSQL client tools."
-            ) from exc
+            raise ExecutorError("`psql` was not found on PATH. Install the PostgreSQL client tools.") from exc
         except subprocess.TimeoutExpired as exc:
             raise ExecutorError(f"psql timed out after {self.timeout_seconds}s") from exc
         return ExecutionResult(
@@ -123,9 +126,7 @@ class PsqlExecutor:
                 timeout=self.timeout_seconds,
             )
         except FileNotFoundError as exc:
-            raise ExecutorError(
-                "`psql` was not found on PATH. Install the PostgreSQL client tools."
-            ) from exc
+            raise ExecutorError("`psql` was not found on PATH. Install the PostgreSQL client tools.") from exc
         except subprocess.TimeoutExpired as exc:
             raise ExecutorError(f"psql timed out after {self.timeout_seconds}s") from exc
         return ExecutionResult(

@@ -27,7 +27,6 @@ Assessing a pillar for which no data was supplied is reported honestly as
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from dbre_platform.config.models import DatabaseRequest, SLOTargets
 
@@ -188,15 +187,15 @@ class MetricsSnapshot:
 
     window_days: float = 1.0
     period_days: float = 30.0
-    good_requests: Optional[int] = None
-    total_requests: Optional[int] = None
-    good_latency_requests: Optional[int] = None
-    total_latency_requests: Optional[int] = None
-    hours_since_last_backup: Optional[float] = None
-    hours_since_last_recovery_test: Optional[float] = None
+    good_requests: int | None = None
+    total_requests: int | None = None
+    good_latency_requests: int | None = None
+    total_latency_requests: int | None = None
+    hours_since_last_backup: float | None = None
+    hours_since_last_recovery_test: float | None = None
 
 
-def _availability_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[ErrorBudgetStatus]:
+def _availability_status(slo: SLOTargets, metrics: MetricsSnapshot) -> ErrorBudgetStatus | None:
     if metrics.good_requests is None or metrics.total_requests is None:
         return None
     sli = sli_from_good_total(metrics.good_requests, metrics.total_requests)
@@ -216,7 +215,7 @@ def _availability_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[
     )
 
 
-def _latency_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[ErrorBudgetStatus]:
+def _latency_status(slo: SLOTargets, metrics: MetricsSnapshot) -> ErrorBudgetStatus | None:
     if metrics.good_latency_requests is None or metrics.total_latency_requests is None:
         return None
     sli = sli_from_good_total(metrics.good_latency_requests, metrics.total_latency_requests)
@@ -244,7 +243,7 @@ def _latency_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[Error
     )
 
 
-def _backup_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[ErrorBudgetStatus]:
+def _backup_status(slo: SLOTargets, metrics: MetricsSnapshot) -> ErrorBudgetStatus | None:
     if metrics.hours_since_last_backup is None:
         return None
     target = slo.backup_rpo_hours
@@ -265,13 +264,12 @@ def _backup_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[ErrorB
         burn_rate=ratio,
         severity=severity,
         detail=(
-            f"{metrics.hours_since_last_backup:.1f}h since last successful backup "
-            f"(RPO target {target:.1f}h)"
+            f"{metrics.hours_since_last_backup:.1f}h since last successful backup (RPO target {target:.1f}h)"
         ),
     )
 
 
-def _recovery_status(slo: SLOTargets, metrics: MetricsSnapshot) -> Optional[ErrorBudgetStatus]:
+def _recovery_status(slo: SLOTargets, metrics: MetricsSnapshot) -> ErrorBudgetStatus | None:
     if metrics.hours_since_last_recovery_test is None:
         return None
     target = slo.recovery_rto_hours

@@ -24,14 +24,13 @@ account, not proven against one.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from dbre_platform.config.models import DatabaseRequest
 from dbre_platform.exceptions import BackupError
 
 try:
-    import boto3  # type: ignore[import-not-found]
-    from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-not-found]
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
 
     _BOTO3_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only when boto3 is absent
@@ -80,7 +79,7 @@ class SnapshotInfo:
     snapshot_id: str
     db_instance_id: str
     status: str
-    created_at: Optional[str]
+    created_at: str | None
     snapshot_type: str
 
 
@@ -102,7 +101,7 @@ class SnapshotManager:
     to catch, matching every other executor in this platform.
     """
 
-    def __init__(self, region_name: Optional[str] = None) -> None:
+    def __init__(self, region_name: str | None = None) -> None:
         _require_boto3()
         self._client = boto3.client("rds", region_name=region_name)
 

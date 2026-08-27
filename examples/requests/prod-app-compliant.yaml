@@ -1,0 +1,42 @@
+# A production request that satisfies every rule in
+# policies/environments/prod.yaml: AWS platform, Multi-AZ, >=30 day backup
+# retention, deletion protection, enhanced monitoring, a recorded
+# approval, a >=99.9% availability target, pgaudit enabled, and >=100GB
+# storage. This is also the fixture used by
+# tests/unit/test_policy_engine.py::test_compliant_prod_request_passes.
+#
+# Try it:
+#   dbre request validate examples/requests/prod-app-compliant.yaml
+#   dbre readiness assess examples/requests/prod-app-compliant.yaml
+apiVersion: dbre.platform/v1
+kind: DatabaseRequest
+metadata:
+  name: orders-api
+  environment: prod
+  owner: payments-team
+  cost_center: CC-4471
+  data_classification: confidential
+spec:
+  platform: aws
+  instance_class: db.r6g.large
+  storage_gb: 200
+  multi_az: true
+  backup_retention_days: 30
+  deletion_protection: true
+  enhanced_monitoring: true
+  connection_limit: 200
+  extensions:
+    - pg_stat_statements
+    - pgaudit
+    - auto_explain
+  tags:
+    team-slack-channel: "#payments-oncall"
+  approvals:
+    - approver: jane-doe
+      ticket: CHG-20441
+      approved_at: "2026-01-15"
+  slo:
+    availability_target: 0.999
+    latency_p99_ms: 150
+    backup_rpo_hours: 12
+    recovery_rto_hours: 2

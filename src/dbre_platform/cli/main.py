@@ -89,6 +89,9 @@ def request_provision(request_file: str, mode: str) -> None:
 
     effective_mode = db_request.spec.platform if mode == "request" else mode
 
+    from dbre_platform.provisioning.base import Provisioner
+
+    provisioner: Provisioner
     if effective_mode == "local":
         from dbre_platform.provisioning.local_docker import LocalDockerProvisioner
 
@@ -324,7 +327,13 @@ def backup_create(full_name: str, dbname: str) -> None:
         params = ConnectionParams.from_env(dbname=dbname)
         metadata = LocalBackupManager().create_backup(params, full_name)
     except DBREPlatformError as exc:
-        audit_logger.record(action="backup_create", target=full_name, environment="unknown", outcome="failure", details={"error": str(exc)})
+        audit_logger.record(
+            action="backup_create",
+            target=full_name,
+            environment="unknown",
+            outcome="failure",
+            details={"error": str(exc)},
+        )
         click.echo(str(exc), err=True)
         sys.exit(1)
 
@@ -335,7 +344,10 @@ def backup_create(full_name: str, dbname: str) -> None:
         outcome="success",
         details={"dump_path": metadata.dump_path, "size_bytes": metadata.size_bytes},
     )
-    click.echo(f"Backup created: {metadata.dump_path} ({metadata.size_bytes} bytes, sha256={metadata.sha256[:12]}...)")
+    click.echo(
+        f"Backup created: {metadata.dump_path} "
+        f"({metadata.size_bytes} bytes, sha256={metadata.sha256[:12]}...)"
+    )
 
 
 @backup.command("list")
@@ -354,8 +366,12 @@ def backup_list(full_name: str | None) -> None:
 
 @backup.command("restore")
 @click.argument("full_name")
-@click.option("--target-dbname", required=True, help="Database to restore into -- should be a fresh/throwaway database.")
-@click.option("--index", default=0, show_default=True, help="0 = most recent backup, 1 = next-most-recent, etc.")
+@click.option(
+    "--target-dbname",
+    required=True,
+    help="Database to restore into -- should be a fresh/throwaway database.",
+)
+@click.option("--index", default=0, show_default=True, help="0 = most recent backup, 1 = next, etc.")
 def backup_restore(full_name: str, target_dbname: str, index: int) -> None:
     """Restore a previous backup of FULL_NAME into --target-dbname."""
     from dataclasses import replace
@@ -376,7 +392,13 @@ def backup_restore(full_name: str, target_dbname: str, index: int) -> None:
         restore_params = replace(params, dbname=target_dbname)
         manager.restore_backup(metadata, restore_params)
     except DBREPlatformError as exc:
-        audit_logger.record(action="backup_restore", target=full_name, environment="unknown", outcome="failure", details={"error": str(exc)})
+        audit_logger.record(
+            action="backup_restore",
+            target=full_name,
+            environment="unknown",
+            outcome="failure",
+            details={"error": str(exc)},
+        )
         click.echo(str(exc), err=True)
         sys.exit(1)
 
@@ -403,7 +425,12 @@ def dr_test_group() -> None:
 @dr_test_group.command("run")
 @click.argument("full_name")
 @click.option("--dbname", required=True, help="The source database to back up and drill against.")
-@click.option("--query", "queries", multiple=True, help="Verification query to run against the restored copy (repeatable).")
+@click.option(
+    "--query",
+    "queries",
+    multiple=True,
+    help="Verification query to run against the restored copy (repeatable).",
+)
 def dr_test_run(full_name: str, dbname: str, queries: tuple[str, ...]) -> None:
     """Run a DR drill against DBRE_PG_* and report pass/fail per step."""
     from dbre_platform.backup.dr_test import run_dr_test

@@ -22,7 +22,6 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from dbre_platform.backup.local_backup import BackupMetadata, LocalBackupManager
 from dbre_platform.exceptions import BackupError, ExecutorError
@@ -58,8 +57,7 @@ class DrTestResult:
             lines.append(f"  [{mark}] {step.name} ({step.duration_seconds:.2f}s): {step.detail}")
         lines.append("")
         lines.append(
-            f"Overall: {'PASSED' if self.passed else 'FAILED'} "
-            f"in {self.total_duration_seconds:.2f}s"
+            f"Overall: {'PASSED' if self.passed else 'FAILED'} in {self.total_duration_seconds:.2f}s"
         )
         if not self.passed:
             lines.append(
@@ -154,7 +152,12 @@ def run_dr_test(
         try:
             manager.restore_backup(backup_metadata, restore_params)
             steps.append(
-                DrTestStep("Restore backup", True, f"restored into {restore_dbname}", time.monotonic() - step_start)
+                DrTestStep(
+                    "Restore backup",
+                    True,
+                    f"restored into {restore_dbname}",
+                    time.monotonic() - step_start,
+                )
             )
         except BackupError as exc:
             steps.append(DrTestStep("Restore backup", False, str(exc), time.monotonic() - step_start))

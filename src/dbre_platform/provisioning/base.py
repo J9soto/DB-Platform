@@ -3,7 +3,7 @@
 This is the one place that implements the non-negotiable part of the
 model described in the README:
 
-    developer -> self-service request -> DBRE CLI -> policy validation engine -> terraform / docker -> postgres
+    developer -> self-service request -> DBRE CLI -> policy engine -> terraform / docker -> postgres
 
 Every ``Provisioner`` (local Docker, AWS RDS) calls ``Provisioner.provision``,
 which runs policy validation and the operational readiness assessment

@@ -17,9 +17,10 @@ but the default dev threshold is 0.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
@@ -158,9 +159,7 @@ CHECKS: list[Callable[[DatabaseRequest], ReadinessCheck]] = [
 ]
 
 
-def readiness_threshold_for(
-    environment: str, policy_path: str | Path = DEFAULT_READINESS_POLICY
-) -> int:
+def readiness_threshold_for(environment: str, policy_path: str | Path = DEFAULT_READINESS_POLICY) -> int:
     path = Path(policy_path)
     if not path.exists():
         return 0

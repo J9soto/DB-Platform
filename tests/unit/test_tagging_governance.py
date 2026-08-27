@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from textwrap import dedent
 
-from dbre_platform.config.models import DatabaseRequest
+from dbre_platform.config.models import REQUIRED_TAG_KEYS, DatabaseRequest
 from dbre_platform.tagging.governance import resolve_tags
 
 
@@ -24,7 +24,7 @@ def make_request(custom_tags=None) -> DatabaseRequest:
 class TestTagResolution(unittest.TestCase):
     def test_required_tags_present(self):
         tags = resolve_tags(make_request())
-        for key in ("application", "environment", "owner", "managed_by", "cost_center", "data_classification"):
+        for key in REQUIRED_TAG_KEYS:
             self.assertIn(key, tags)
 
     def test_global_tags_from_policy_are_included(self):

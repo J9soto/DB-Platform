@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dbre_platform.audit.logger import AuditLogger, GENESIS_HASH
+from dbre_platform.audit.logger import GENESIS_HASH, AuditLogger
 
 
 class TestAuditLogger(unittest.TestCase):
@@ -53,9 +53,7 @@ class TestAuditLogger(unittest.TestCase):
         self.assertEqual([e.target for e in events], ["a", "b"])
 
     def test_details_are_preserved(self):
-        event = self.logger.record(
-            "provision", "orders-api-dev", "dev", "success", details={"mode": "local"}
-        )
+        event = self.logger.record("provision", "orders-api-dev", "dev", "success", details={"mode": "local"})
         self.assertEqual(event.details, {"mode": "local"})
         reloaded = self.logger.read_all()[0]
         self.assertEqual(reloaded.details, {"mode": "local"})

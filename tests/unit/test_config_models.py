@@ -2,7 +2,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from dbre_platform.config.models import DatabaseRequest
+from dbre_platform.config.models import REQUIRED_TAG_KEYS, DatabaseRequest
 
 
 def minimal_doc(**overrides):
@@ -59,7 +59,7 @@ class TestDatabaseRequestSchema(unittest.TestCase):
     def test_rendered_tags_required_keys_present(self):
         request = DatabaseRequest.model_validate(minimal_doc())
         tags = request.rendered_tags()
-        for key in ("application", "environment", "owner", "managed_by", "cost_center", "data_classification"):
+        for key in REQUIRED_TAG_KEYS:
             self.assertIn(key, tags)
 
     def test_custom_tags_cannot_override_required_keys(self):

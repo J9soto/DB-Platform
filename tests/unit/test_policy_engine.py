@@ -137,9 +137,7 @@ class TestPolicyEngineWithRealPolicies(unittest.TestCase):
         request = make_request(extensions=["pg_stat_statements"])
         request.metadata.data_classification = "public"
         result = self.engine.evaluate(request)
-        self.assertNotIn(
-            "tagging-sensitive-data-requires-audit", {v.rule_id for v in result.violations}
-        )
+        self.assertNotIn("tagging-sensitive-data-requires-audit", {v.rule_id for v in result.violations})
 
 
 class TestPolicyEngineWithCustomPolicyDir(unittest.TestCase):

@@ -111,9 +111,7 @@ class DatabaseSpec(BaseModel):
     engine: Literal["postgres"] = "postgres"
     engine_version: str = Field("16", description="Major PostgreSQL version.")
 
-    instance_class: str = Field(
-        "db.t4g.micro", description="AWS RDS instance class. Ignored in local mode."
-    )
+    instance_class: str = Field("db.t4g.micro", description="AWS RDS instance class. Ignored in local mode.")
     storage_gb: int = Field(20, ge=20, le=65536)
 
     multi_az: bool = Field(False, description="AWS Multi-AZ standby. Required by policy in prod.")
