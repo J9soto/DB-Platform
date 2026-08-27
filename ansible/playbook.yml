@@ -1,0 +1,24 @@
+---
+# Applies DBRE PostgreSQL standards via Ansible instead of the `dbre` CLI.
+# See ansible/README.md for what this does, its relationship to the
+# Python implementation, and the disclosure that it has not been run in
+# the environment this repository was built in.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory/local.ini ansible/playbook.yml \
+#     -e postgres_host=localhost -e postgres_port=5432 \
+#     -e postgres_admin_user=postgres -e postgres_admin_password=<...> \
+#     -e target_database=orders_api -e app_name=orders_api
+- name: Apply DBRE PostgreSQL standards
+  hosts: postgres_targets
+  gather_facts: false
+  collections:
+    - community.postgresql
+
+  vars:
+    postgres_port: 5432
+    postgres_admin_user: postgres
+    environment_name: dev
+
+  roles:
+    - role: postgres_standards

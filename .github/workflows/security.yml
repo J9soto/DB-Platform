@@ -1,0 +1,90 @@
+name: Security
+
+# A dedicated security pipeline, separate from functional CI, per the
+# platform requirement that every PR be checked for secrets, vulnerable
+# dependencies, insecure Python patterns, and insecure Terraform --
+# see SECURITY.md for what each of these catches and why.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Dependency advisories are published continuously, not just when
+    # this repo's code changes -- catch a newly-disclosed CVE in an
+    # already-merged dependency within a week, not never.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan full history, not just the latest commit
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-scan:
+    name: Dependency vulnerability scanning (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Install the project (so pip-audit resolves real pinned versions)
+        run: pip install -e ".[aws,dev]"
+
+      - name: Audit installed dependencies
+        run: pip-audit --strict
+
+  static-analysis:
+    name: Python static security analysis (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install bandit
+        run: pip install "bandit[toml]"
+
+      - name: Run bandit
+        run: bandit -r src/dbre_platform -c pyproject.toml
+
+  terraform-security-scan:
+    name: Terraform security scanning (tfsec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+
+  pre-commit-hooks:
+    name: Run the same hooks pre-commit enforces locally
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: pre-commit/action@v3.0.1

@@ -1,0 +1,101 @@
+---
+- name: Fail fast if required variables are missing
+  ansible.builtin.assert:
+    that:
+      - target_database | length > 0
+      - postgres_admin_password | length > 0
+    fail_msg: >-
+      target_database and postgres_admin_password are required
+      (e.g. -e target_database=orders_api -e postgres_admin_password=...).
+      postgres_admin_password should come from an env var or vault, never
+      a literal in a playbook or inventory file.
+
+- name: Ensure required extensions exist
+  community.postgresql.postgresql_ext:
+    name: "{{ item }}"
+    db: "{{ target_database }}"
+    login_host: "{{ postgres_host }}"
+    login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+  loop: "{{ extensions }}"
+
+# Mirrors dbre_platform.postgres.standards.render_database_settings_sql --
+# same settings, same values, applied via postgresql_query instead of a
+# Jinja2-rendered SQL script.
+- name: Apply per-database session/logging standards
+  community.postgresql.postgresql_query:
+    db: "{{ target_database }}"
+    login_host: "{{ postgres_host }}"
+    login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    query: "{{ item }}"
+  loop:
+    - "ALTER DATABASE \"{{ target_database }}\" SET statement_timeout = '{{ statement_timeout_ms }}ms';"
+    - "ALTER DATABASE \"{{ target_database }}\" SET idle_in_transaction_session_timeout = '{{ idle_in_transaction_timeout_ms }}ms';"
+    - "ALTER DATABASE \"{{ target_database }}\" SET timezone = 'UTC';"
+    - "ALTER DATABASE \"{{ target_database }}\" CONNECTION LIMIT {{ connection_limit }};"
+
+- name: Create standard group roles (NOLOGIN)
+  community.postgresql.postgresql_user:
+    name: "{{ item }}"
+    role_attr_flags: NOLOGIN
+    state: present
+    login_host: "{{ postgres_host }}"
+    login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+  loop: "{{ group_roles }}"
+
+- name: Grant pg_monitor to db_monitor
+  community.postgresql.postgresql_query:
+    db: "{{ target_database }}"
+    login_host: "{{ postgres_host }}"
+    login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    query: "GRANT pg_monitor TO db_monitor;"
+
+# Least-privilege grants, matching docs/rbac-model.md exactly:
+# db_ro reads only; db_app/db_rw read+write existing rows, no DDL;
+# db_owner/db_migration get full DDL rights and own future objects too.
+- name: Apply least-privilege schema grants
+  community.postgresql.postgresql_privs:
+    db: "{{ target_database }}"
+    login_host: "{{ postgres_host }}"
+    login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    type: "{{ item.type }}"
+    objs: "{{ item.objs }}"
+    privs: "{{ item.privs }}"
+    roles: "{{ item.roles }}"
+    schema: public
+  loop:
+    - { type: schema, objs: public, privs: USAGE, roles: "db_owner,db_app,db_rw,db_ro,db_migration" }
+    - { type: schema, objs: public, privs: CREATE, roles: "db_owner,db_migration" }
+    - { type: table, objs: ALL_IN_SCHEMA, privs: SELECT, roles: db_ro }
+    - { type: table, objs: ALL_IN_SCHEMA, privs: "SELECT,INSERT,UPDATE,DELETE", roles: "db_app,db_rw" }
+    - { type: table, objs: ALL_IN_SCHEMA, privs: ALL, roles: "db_owner,db_migration" }
+    - { type: sequence, objs: ALL_IN_SCHEMA, privs: "SELECT,USAGE", roles: "db_app,db_rw,db_ro,db_migration" }
+    - { type: sequence, objs: ALL_IN_SCHEMA, privs: ALL, roles: "db_owner,db_migration" }
+
+- name: Ensure future objects inherit the same grants (default privileges)
+  community.postgresql.postgresql_privs:
+    db: "{{ target_database }}"
+    login_host: "{{ postgres_host }}"
+    login_port: "{{ postgres_port }}"
+    login_user: "{{ postgres_admin_user }}"
+    login_password: "{{ postgres_admin_password }}"
+    type: "{{ item.type }}"
+    privs: "{{ item.privs }}"
+    roles: "{{ item.roles }}"
+    schema: public
+    target_role: "{{ item.target_role }}"
+    grant_option: false
+  loop:
+    - { type: table, privs: SELECT, roles: db_ro, target_role: db_owner }
+    - { type: table, privs: "SELECT,INSERT,UPDATE,DELETE", roles: "db_app,db_rw", target_role: db_owner }
+    - { type: table, privs: SELECT, roles: db_ro, target_role: db_migration }
+    - { type: table, privs: "SELECT,INSERT,UPDATE,DELETE", roles: "db_app,db_rw", target_role: db_migration }

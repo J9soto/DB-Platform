@@ -1,0 +1,30 @@
+---
+# Defaults mirror dbre_platform.config.models.DatabaseSpec's own defaults,
+# so a request YAML file and an Ansible -e override express the same
+# knobs. Override any of these with -e on the command line.
+postgres_port: 5432
+postgres_admin_user: postgres
+postgres_admin_password: "{{ lookup('env', 'DBRE_PG_PASSWORD') }}"
+postgres_ssl_mode: prefer
+
+target_database: ""
+app_name: "{{ target_database }}"
+environment_name: dev
+
+connection_limit: 100
+statement_timeout_ms: 30000
+idle_in_transaction_timeout_ms: 60000
+
+extensions:
+  - pg_stat_statements
+
+# The six standard group roles this platform applies everywhere -- see
+# docs/rbac-model.md. Not meant to be overridden per-request; changing
+# the *set* of roles is a platform-wide decision, not a per-database one.
+group_roles:
+  - db_owner
+  - db_app
+  - db_ro
+  - db_rw
+  - db_migration
+  - db_monitor
