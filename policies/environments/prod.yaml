@@ -1,0 +1,81 @@
+# Production guardrails.
+#
+# These are the rules the platform will not compromise on: a request that
+# fails any ERROR-severity rule here is refused before Terraform ever runs
+# (see dbre_platform.provisioning.base.Provisioner.provision). Every rule
+# maps to a specific reliability, compliance, or cost-recovery requirement -
+# see docs/dbre-principles.md for the reasoning behind each one.
+environment: prod
+
+rules:
+  - id: prod-platform-must-be-aws
+    description: Production databases run on managed RDS, never the local Docker demo path.
+    field: spec.platform
+    operator: equals
+    value: aws
+    severity: error
+    message: "Production requests must set spec.platform: aws (got {actual})."
+
+  - id: prod-multi-az-required
+    description: Automatic failover is mandatory for anything customer-facing.
+    field: spec.multi_az
+    operator: equals
+    value: true
+    severity: error
+    message: "Production requires spec.multi_az: true for automatic failover."
+
+  - id: prod-backup-retention-min
+    description: Compliance and incident-response minimum retention window.
+    field: spec.backup_retention_days
+    operator: gte
+    value: 30
+    severity: error
+    message: "Production requires backup_retention_days >= 30 (got {actual})."
+
+  - id: prod-deletion-protection-required
+    description: Prevents a single terraform destroy / console click from deleting a production database.
+    field: spec.deletion_protection
+    operator: equals
+    value: true
+    severity: error
+    message: "Production requires spec.deletion_protection: true."
+
+  - id: prod-enhanced-monitoring-required
+    description: 1-minute granularity metrics are required to meet the SLO burn-rate alerting window.
+    field: spec.enhanced_monitoring
+    operator: equals
+    value: true
+    severity: error
+    message: "Production requires spec.enhanced_monitoring: true."
+
+  - id: prod-approval-required
+    description: A production database change requires at least one recorded approval.
+    field: spec.approvals
+    operator: min_length
+    value: 1
+    severity: error
+    message: "Production requests require at least one entry in spec.approvals (ticket + approver)."
+
+  - id: prod-slo-availability-floor
+    description: The platform's contractual floor for anything in production.
+    field: spec.slo.availability_target
+    operator: gte
+    value: 0.999
+    severity: error
+    message: "Production spec.slo.availability_target must be >= 0.999 (got {actual})."
+
+  - id: prod-audit-extension-required
+    description: Audit logging (pgaudit) is mandatory for confidential/restricted data classes.
+    field: spec.extensions
+    operator: contains
+    value: pgaudit
+    severity: error
+    message: "spec.extensions must include 'pgaudit' in production."
+
+  - id: prod-storage-minimum
+    description: Below this size, headroom for growth and IOPS burst credits is too thin for prod.
+    field: spec.storage_gb
+    operator: gte
+    value: 100
+    severity: error
+    message: "Production requires storage_gb >= 100 (got {actual})."

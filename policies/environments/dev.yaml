@@ -1,0 +1,24 @@
+# Guardrails for the `dev` environment.
+#
+# Dev is intentionally permissive: the goal is fast iteration, not
+# five-nines reliability. The only rules here catch requests that are
+# outright unsafe or nonsensical (e.g. someone accidentally requesting an
+# enormous instance in dev), not requests that are merely "not production
+# grade."
+environment: dev
+
+rules:
+  - id: dev-storage-sane-ceiling
+    description: Dev databases should not silently request production-scale storage.
+    field: spec.storage_gb
+    operator: lte
+    value: 500
+    severity: warning
+    message: "Dev request is for {actual}GB of storage - confirm this is intentional (soft ceiling: 500GB)."
+
+  - id: dev-connection-limit-sane-ceiling
+    field: spec.connection_limit
+    operator: lte
+    value: 500
+    severity: warning
+    message: "Dev connection_limit of {actual} is unusually high for a dev workload."

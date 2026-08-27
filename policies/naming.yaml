@@ -1,0 +1,19 @@
+# Naming conventions, enforced globally (every environment).
+description: Database identifier naming conventions.
+
+rules:
+  - id: naming-convention-format
+    description: Names must be lowercase, hyphenated, and DNS/RDS-identifier safe.
+    field: metadata.name
+    operator: regex
+    value: "^[a-z][a-z0-9-]{2,49}$"
+    severity: error
+    message: "metadata.name '{actual}' must be lowercase alphanumeric with hyphens (3-50 chars)."
+
+  - id: naming-not-reserved
+    description: Reserved words that collide with PostgreSQL/RDS internals or are ambiguous.
+    field: metadata.name
+    operator: not_in
+    value: ["admin", "postgres", "root", "template0", "template1", "rdsadmin"]
+    severity: error
+    message: "metadata.name '{actual}' is a reserved name."

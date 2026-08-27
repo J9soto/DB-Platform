@@ -1,0 +1,46 @@
+# Tag governance.
+#
+# The six *required* tag keys (application, environment, owner, managed_by,
+# cost_center, data_classification) are defined in
+# dbre_platform.config.models.REQUIRED_TAG_KEYS because the request schema
+# itself needs to know that shape. Everything that is genuinely a *policy*
+# decision -- rather than a schema decision -- lives here instead, so it can
+# change without a code deploy:
+#
+#   - global_tags: extra tags stamped onto every resource platform-wide,
+#     regardless of what any individual request asks for.
+#   - rules: value-format validation for tag-bearing fields, evaluated by
+#     the same generic policy engine as environment guardrails (see
+#     policies/environments/*.yaml and dbre_platform.policy.engine).
+description: >
+  Tag governance: platform-wide tags applied to every resource, and
+  format rules for tag-bearing fields.
+
+global_tags:
+  provisioned_by: dbre-platform
+  terraform_managed: "true"
+
+rules:
+  - id: tagging-cost-center-format
+    description: Cost center must match finance's chargeback code format.
+    field: metadata.cost_center
+    operator: regex
+    value: "^CC-[0-9]{3,6}$"
+    severity: error
+    message: "metadata.cost_center must match the pattern CC-#### (got {actual})."
+
+  - id: tagging-sensitive-data-requires-audit
+    description: >
+      Confidential/restricted data must always be paired with audit logging,
+      regardless of environment. Demonstrates a conditional ("when") rule.
+    when:
+      field: metadata.data_classification
+      operator: in
+      value: [confidential, restricted]
+    field: spec.extensions
+    operator: contains
+    value: pgaudit
+    severity: error
+    message: >
+      metadata.data_classification is confidential or restricted, which requires
+      'pgaudit' in spec.extensions regardless of environment (got extensions={actual}).

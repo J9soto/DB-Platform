@@ -1,0 +1,14 @@
+# Operational readiness score thresholds, per environment.
+#
+# `dbre provision` refuses to provision when the request's readiness score
+# falls below its environment's threshold (see
+# dbre_platform.provisioning.base.Provisioner.provision and
+# dbre_platform.readiness.scorecard). Raise `prod` here as the platform's
+# operational bar matures; lowering it should require the same review rigor
+# as loosening a policy guardrail.
+description: Operational readiness score thresholds by environment.
+
+thresholds:
+  dev: 0
+  staging: 60
+  prod: 85

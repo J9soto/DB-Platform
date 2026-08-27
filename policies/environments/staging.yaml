@@ -1,0 +1,30 @@
+# Guardrails for `staging`.
+#
+# Staging should behave enough like production to catch real problems
+# (backups, monitoring) but does not need production's full HA/approval
+# overhead - it is not customer-facing and does not carry an availability SLA.
+environment: staging
+
+rules:
+  - id: staging-backup-retention-min
+    description: Staging must retain enough backup history to debug a bad deploy.
+    field: spec.backup_retention_days
+    operator: gte
+    value: 7
+    severity: error
+    message: "Staging requires backup_retention_days >= 7 (got {actual})."
+
+  - id: staging-enhanced-monitoring-recommended
+    field: spec.enhanced_monitoring
+    operator: equals
+    value: true
+    severity: warning
+    message: "Enhanced monitoring is recommended in staging so it matches prod's observability posture before go-live."
+
+  - id: staging-audit-extension-required
+    description: pgaudit must be enabled so staging exercises the same audit path as prod.
+    field: spec.extensions
+    operator: contains
+    value: pgaudit
+    severity: error
+    message: "spec.extensions must include 'pgaudit' in staging."
