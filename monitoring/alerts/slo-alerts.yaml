@@ -1,0 +1,61 @@
+# Vendor-neutral SLO burn-rate alert definitions.
+#
+# These follow the standard multi-window, multi-burn-rate pattern (the same
+# one Google's SRE workbook describes): a *fast* burn rate over a short
+# window pages immediately because the error budget will be gone in hours,
+# while a *slow* burn rate over a longer window files a ticket because
+# there's still time to react without waking anyone up. See
+# docs/slo-framework.md for the math (dbre_platform.slo.calculator
+# implements it) and monitoring/alerts/prometheus-rules-example.yaml for
+# what these look like translated into one specific alerting backend.
+description: SLO burn-rate alerting thresholds, independent of any specific monitoring vendor.
+
+alerts:
+  - id: availability-fast-burn
+    slo: availability
+    description: >
+      Burning the monthly error budget fast enough to exhaust it in under
+      2 days. Page immediately.
+    burn_rate_threshold: 14.4
+    lookback_window: 1h
+    severity: page
+
+  - id: availability-slow-burn
+    slo: availability
+    description: >
+      Burning the monthly error budget fast enough to exhaust it within the
+      month, but not urgently. File a ticket for the next business day.
+    burn_rate_threshold: 3
+    lookback_window: 6h
+    severity: ticket
+
+  - id: latency-fast-burn
+    slo: latency
+    description: p99 latency SLO burning fast -- page immediately.
+    burn_rate_threshold: 14.4
+    lookback_window: 1h
+    severity: page
+
+  - id: latency-slow-burn
+    slo: latency
+    burn_rate_threshold: 3
+    lookback_window: 6h
+    severity: ticket
+
+  - id: backup-failure
+    slo: backup
+    description: >
+      Backup success/failure is binary, not a rate -- there is no
+      meaningful "burn rate" for a single failed backup. Any failure pages
+      immediately, because the RPO guarantee is void until the next
+      successful backup completes.
+    condition: last_backup_status_not_success
+    severity: page
+
+  - id: recovery-drill-overdue
+    slo: recovery
+    description: >
+      The simulated DR test (dbre_platform.backup.dr_test) has not
+      completed successfully within the SLO's RTO-review interval.
+    condition: dr_test_overdue
+    severity: ticket

@@ -1,0 +1,194 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Connection saturation",
+        "view": "timeSeries",
+        "metrics": [
+          [
+            "AWS/RDS",
+            "DatabaseConnections",
+            "DBInstanceIdentifier",
+            "${DB_INSTANCE_ID}"
+          ]
+        ],
+        "stat": "Average",
+        "period": 300,
+        "region": "${AWS_REGION}"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Connections by state** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "CPU utilization",
+        "view": "timeSeries",
+        "metrics": [
+          [
+            "AWS/RDS",
+            "CPUUtilization",
+            "DBInstanceIdentifier",
+            "${DB_INSTANCE_ID}"
+          ]
+        ],
+        "stat": "Average",
+        "period": 300,
+        "region": "${AWS_REGION}"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 18,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Long-running queries** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 24,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Blocking locks** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 30,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Top queries by total time** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 36,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Cache hit ratio** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 42,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Read/write latency",
+        "view": "timeSeries",
+        "metrics": [
+          [
+            "AWS/RDS",
+            "ReadLatency",
+            "DBInstanceIdentifier",
+            "${DB_INSTANCE_ID}"
+          ]
+        ],
+        "stat": "Average",
+        "period": 300,
+        "region": "${AWS_REGION}"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 48,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Database size",
+        "view": "timeSeries",
+        "metrics": [
+          [
+            "AWS/RDS",
+            "FreeStorageSpace",
+            "DBInstanceIdentifier",
+            "${DB_INSTANCE_ID}"
+          ]
+        ],
+        "stat": "Average",
+        "period": 300,
+        "region": "${AWS_REGION}"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 54,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Largest tables / bloat estimate** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 60,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Index usage** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 66,
+      "width": 12,
+      "height": 2,
+      "properties": {
+        "markdown": "**Autovacuum health** is not available as a native CloudWatch metric (it requires a live SQL query). View it in Grafana against the platform's PostgreSQL datasource, or export it via the `postgres_exporter` CloudWatch agent integration. See docs/local-vs-aws.md."
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 72,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Replication lag",
+        "view": "timeSeries",
+        "metrics": [
+          [
+            "AWS/RDS",
+            "ReplicaLag",
+            "DBInstanceIdentifier",
+            "${DB_INSTANCE_ID}"
+          ]
+        ],
+        "stat": "Average",
+        "period": 300,
+        "region": "${AWS_REGION}"
+      }
+    }
+  ]
+}

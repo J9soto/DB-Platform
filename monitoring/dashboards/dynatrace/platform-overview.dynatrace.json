@@ -1,0 +1,98 @@
+{
+  "dashboardMetadata": {
+    "name": "DBRE Platform Overview"
+  },
+  "tiles": [
+    {
+      "name": "Connection saturation",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.availability.connection_saturation",
+      "unit": "%",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Connections by state",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.availability.connections_by_state",
+      "unit": "unspecified",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "CPU utilization",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.availability.connection_saturation",
+      "unit": "%",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Long-running queries",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.latency.long_running_queries",
+      "unit": "unspecified",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Blocking locks",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.latency.blocking_locks",
+      "unit": "unspecified",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Top queries by total time",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.latency.top_queries_by_total_time",
+      "unit": "ms",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Cache hit ratio",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.latency.cache_hit_ratio",
+      "unit": "ratio",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Read/write latency",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.latency.cache_hit_ratio",
+      "unit": "ms",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Database size",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.capacity.database_size",
+      "unit": "bytes",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Largest tables / bloat estimate",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.capacity.table_sizes_and_bloat_estimate",
+      "unit": "unspecified",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Index usage",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.capacity.index_usage",
+      "unit": "unspecified",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Autovacuum health",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.capacity.autovacuum_health",
+      "unit": "unspecified",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    },
+    {
+      "name": "Replication lag",
+      "tileType": "CUSTOM_CHARTING",
+      "metric": "dbre.platform.recovery.replication_lag",
+      "unit": "s",
+      "_comment": "Illustrative only -- requires publishing this metric via the Dynatrace Metrics API or a custom extension. See the module docstring in dbre_platform.observability.dashboards.to_dynatrace_tiles_json."
+    }
+  ]
+}

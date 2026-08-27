@@ -1,0 +1,35 @@
+# Illustrative translation of monitoring/alerts/slo-alerts.yaml into
+# Prometheus alerting rules, assuming metrics are being scraped from
+# postgres_exporter (see docker-compose.yml's `observability` profile).
+# This file is a worked example for one backend, not something the
+# platform executes -- the vendor-neutral source of truth is
+# slo-alerts.yaml plus dbre_platform.slo.calculator.
+groups:
+  - name: dbre-platform-slo
+    rules:
+      - alert: AvailabilityErrorBudgetFastBurn
+        expr: |
+          (1 - avg_over_time(pg_up[1h])) / (1 - 0.999) > 14.4
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Availability error budget burning fast (>14.4x) over 1h window"
+
+      - alert: AvailabilityErrorBudgetSlowBurn
+        expr: |
+          (1 - avg_over_time(pg_up[6h])) / (1 - 0.999) > 3
+        for: 30m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Availability error budget burning steadily (>3x) over 6h window"
+
+      - alert: LatencySLOFastBurn
+        expr: |
+          histogram_quantile(0.99, rate(pg_stat_statements_mean_exec_time_bucket[1h])) > 200
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "p99 query latency exceeds the 200ms SLO target"

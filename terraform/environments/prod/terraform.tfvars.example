@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in your account's values.
+# terraform.tfvars is gitignored on purpose -- see .gitignore.
+
+name       = "orders-api"
+aws_region = "us-east-1"
+
+vpc_id     = "vpc-REPLACE_ME"
+subnet_ids = ["subnet-REPLACE_ME_A", "subnet-REPLACE_ME_B"]
+
+allowed_security_group_ids = ["sg-REPLACE_ME_APP_TIER"]
+
+tags = {
+  application         = "orders-api"
+  environment         = "prod"
+  owner               = "payments-team"
+  managed_by          = "dbre-platform"
+  cost_center         = "CC-4471"
+  data_classification = "confidential"
+}

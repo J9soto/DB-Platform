@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and fill in your account's values.
+
+name       = "orders-api"
+aws_region = "us-east-1"
+
+vpc_id     = "vpc-REPLACE_ME"
+subnet_ids = ["subnet-REPLACE_ME_A", "subnet-REPLACE_ME_B"]
+
+tags = {
+  application         = "orders-api"
+  environment         = "dev"
+  owner               = "payments-team"
+  managed_by          = "dbre-platform"
+  cost_center         = "CC-4471"
+  data_classification = "internal"
+}
