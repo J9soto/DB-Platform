@@ -32,7 +32,10 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from dbre_platform.config.models import DatabaseRequest
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
-_env = Environment(
+_env = Environment(  # nosec B701 -- these templates render SQL (database_settings.sql.j2), not
+    # HTML/XML; autoescape would HTML-escape quotes and other SQL syntax and
+    # corrupt the generated statements. Values interpolated are generated
+    # configuration values, not untrusted request text.
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     undefined=StrictUndefined,
     trim_blocks=True,

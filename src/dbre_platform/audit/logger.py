@@ -88,12 +88,13 @@ class AuditLogger:
         details: dict[str, Any] | None = None,
     ) -> AuditEvent:
         prev_hash = self._last_hash()
+        resolved_actor: str = actor if actor is not None else os.environ.get("DBRE_ACTOR", getpass.getuser())
         event = AuditEvent(
             action=action,
             target=target,
             environment=environment,
             outcome=outcome,
-            actor=actor or os.environ.get("DBRE_ACTOR", getpass.getuser()),
+            actor=resolved_actor,
             timestamp=datetime.now(timezone.utc).isoformat(),
             details=details or {},
             prev_hash=prev_hash,

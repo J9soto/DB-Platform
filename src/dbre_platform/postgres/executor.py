@@ -16,7 +16,7 @@ only -- see ``ConnectionParams.from_env``.
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404 -- this module's design is to shell out to psql, not embed a driver (ADR 0002)
 from dataclasses import dataclass
 
 from dbre_platform.exceptions import ExecutorError
@@ -98,7 +98,7 @@ class PsqlExecutor:
 
     def run_sql(self, sql: str) -> ExecutionResult:
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603,B607 -- fixed, code-built `psql` invocation; see module docstring (ADR 0002)
                 [*self._base_args(), "-c", sql],
                 env=self._env(),
                 capture_output=True,
@@ -118,7 +118,7 @@ class PsqlExecutor:
 
     def run_file(self, path: str) -> ExecutionResult:
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603,B607 -- fixed, code-built `psql` invocation; see module docstring (ADR 0002)
                 [*self._base_args(), "-f", path],
                 env=self._env(),
                 capture_output=True,
@@ -149,7 +149,7 @@ class PsqlExecutor:
         ``dbre_platform.postgres.rbac.render_roles_sql``.
         """
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603,B607 -- fixed, code-built `psql` invocation; see module docstring (ADR 0002)
                 [*self._base_args(), "-f", "-"],
                 input=sql,
                 env=self._env(),
@@ -181,7 +181,7 @@ class PsqlExecutor:
         """
         args = [*self._base_args()[:-1], "-c", sql]  # drop --quiet so headers show
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603,B607 -- fixed, code-built `psql` invocation; see module docstring (ADR 0002)
                 args, env=self._env(), capture_output=True, text=True, timeout=self.timeout_seconds
             )
         except FileNotFoundError as exc:

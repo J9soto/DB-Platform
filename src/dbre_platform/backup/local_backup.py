@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
+import subprocess  # nosec B404 -- this module's design is to shell out to pg_dump/pg_restore, not embed a driver (ADR 0002)
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -108,7 +108,7 @@ class LocalBackupManager:
             str(dump_path),
         ]
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603,B607 -- fixed, code-built `pg_dump` invocation; see docs/decisions/0002-psql-subprocess-over-driver.md
                 args, env=self._env(params), capture_output=True, text=True, timeout=self.timeout_seconds
             )
         except FileNotFoundError as exc:
@@ -194,7 +194,7 @@ class LocalBackupManager:
         args.append(metadata.dump_path)
 
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603,B607 -- fixed, code-built `pg_restore` invocation; see docs/decisions/0002-psql-subprocess-over-driver.md
                 args, env=self._env(params), capture_output=True, text=True, timeout=self.timeout_seconds
             )
         except FileNotFoundError as exc:

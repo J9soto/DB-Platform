@@ -41,24 +41,24 @@ path was taken. The detailed text version below spells out exactly which
 module and function owns each step.
 
 ```
- Developer                                                                                 
-     |                                                                                      
-     |  1. writes a YAML request (examples/requests/*.yaml)                                 
-     v                                                                                       
- DBRE CLI (dbre request validate|provision)                                                  
-     |                                                                                       
-     |  2. schema validation (dbre_platform.config) -- structurally well-formed?             
-     v                                                                                       
- Policy Validation Engine (dbre_platform.policy)                                             
-     |                                                                                       
-     |  3. data-driven rules per environment -- FAILS THE REQUEST, does not warn-and-continue 
-     v                                                                                       
- Operational Readiness Scorecard (dbre_platform.readiness)                                   
-     |                                                                                       
-     |  4. weighted checklist -- below threshold ALSO refuses to provision                   
-     v                                                                                       
- Provisioner (dbre_platform.provisioning)                                                    
-     |                                                                                       
+ Developer
+     |
+     |  1. writes a YAML request (examples/requests/*.yaml)
+     v
+ DBRE CLI (dbre request validate|provision)
+     |
+     |  2. schema validation (dbre_platform.config) -- structurally well-formed?
+     v
+ Policy Validation Engine (dbre_platform.policy)
+     |
+     |  3. data-driven rules per environment -- FAILS THE REQUEST, does not warn-and-continue
+     v
+ Operational Readiness Scorecard (dbre_platform.readiness)
+     |
+     |  4. weighted checklist -- below threshold ALSO refuses to provision
+     v
+ Provisioner (dbre_platform.provisioning)
+     |
      +--> LocalDockerProvisioner ---> docker compose + PostgreSQL container
      |        (no AWS account needed)      |
      |                                      v

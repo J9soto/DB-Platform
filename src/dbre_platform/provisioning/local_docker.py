@@ -18,9 +18,10 @@ limits does the right thing without any special-cased "diff" logic here.
 
 from __future__ import annotations
 
+import re
 import secrets
 import shutil
-import subprocess
+import subprocess  # nosec B404 -- shells out to `docker compose` by design; PATH presence is checked before use
 import time
 from pathlib import Path
 
@@ -44,6 +45,13 @@ DEFAULT_COMPOSE_FILE = Path("docker-compose.yml")
 OVERRIDE_FILE = Path(".dbre") / "docker-compose.override.yml"
 SUPERUSER_ENV_FILE = Path(".dbre") / "local-superuser.env"
 DEFAULT_LOCAL_PORT = 5432
+
+# db_name is always request.metadata.name (already validated by Pydantic against
+# ^[a-z][a-z0-9-]{1,48}[a-z0-9]$ -- see dbre_platform.config.models) with hyphens
+# swapped for underscores. This is a defense-in-depth re-check at the point of SQL
+# string interpolation itself: psql is invoked via subprocess (ADR 0002), so there
+# is no driver-level parameter binding available for these two statements.
+_SAFE_DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 
 
 class LocalDockerProvisioner(Provisioner):
@@ -102,7 +110,9 @@ class LocalDockerProvisioner(Provisioner):
             "postgres",
         ]
         logger.info("starting local postgres container", extra={"command": " ".join(cmd)})
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(  # nosec B603,B607 -- fixed, code-built `docker compose` invocation; PATH presence checked above
+            cmd, capture_output=True, text=True, timeout=120
+        )
         if result.returncode != 0:
             raise ProvisioningError(
                 "docker compose up failed:\n"
@@ -126,9 +136,18 @@ class LocalDockerProvisioner(Provisioner):
     # -- bootstrap -------------------------------------------------------
 
     def _create_database_if_missing(self, admin_executor: PsqlExecutor, db_name: str) -> None:
-        exists = admin_executor.run_sql(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';")
+        if not _SAFE_DB_NAME_RE.match(db_name):
+            # Should be unreachable given the Pydantic validation upstream -- see
+            # _SAFE_DB_NAME_RE's docstring comment above. Refusing outright rather
+            # than escaping keeps this a hard boundary, not a best-effort filter.
+            raise ProvisioningError(f"Refusing to use unsafe database name: {db_name!r}")
+        exists = admin_executor.run_sql(  # nosec B608 -- db_name validated immediately above
+            f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"
+        )
         if "1 row" not in exists.stdout and "(1 row)" not in exists.stdout:
-            create_result = admin_executor.run_sql(f'CREATE DATABASE "{db_name}";')
+            create_result = admin_executor.run_sql(  # nosec B608 -- db_name validated above
+                f'CREATE DATABASE "{db_name}";'
+            )
             if not create_result.success:
                 raise ProvisioningError(f"Failed to create database {db_name}: {create_result.stderr}")
 

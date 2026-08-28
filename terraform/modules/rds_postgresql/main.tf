@@ -11,7 +11,7 @@
 #     spec.platform: aws for production.
 
 locals {
-  identifier      = "${var.name}-${var.environment}"
+  identifier             = "${var.name}-${var.environment}"
   parameter_group_family = "postgres${split(".", var.engine_version)[0]}"
 
   baseline_parameters = {
@@ -34,11 +34,12 @@ resource "random_password" "master" {
 resource "aws_secretsmanager_secret" "master" {
   name        = "dbre-platform/${local.identifier}/master-credentials"
   description = "RDS master credentials for ${local.identifier}, managed by dbre-platform Terraform."
+  kms_key_id  = var.kms_key_id != "" ? var.kms_key_id : null
   tags        = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "master" {
-  secret_id = aws_secretsmanager_secret.master.id
+  secret_id     = aws_secretsmanager_secret.master.id
   secret_string = jsonencode({
     username = "dbre_admin"
     password = random_password.master.result
@@ -69,7 +70,7 @@ resource "aws_security_group_rule" "ingress_security_groups" {
   protocol                 = "tcp"
   security_group_id        = aws_security_group.this.id
   source_security_group_id = var.allowed_security_group_ids[count.index]
-  description               = "App tier access"
+  description              = "App tier access"
 }
 
 resource "aws_security_group_rule" "ingress_cidrs" {
@@ -83,13 +84,22 @@ resource "aws_security_group_rule" "ingress_cidrs" {
   description       = "Explicit CIDR access (should be empty in production)"
 }
 
-resource "aws_security_group_rule" "egress_all" {
+# RDS does not initiate outbound connections for normal operation --
+# backups, snapshots, and control-plane traffic all run over AWS-managed
+# infrastructure outside this security group. No egress rule is created by
+# default. If a specific integration (e.g. the aws_s3 extension, an
+# external replication target) genuinely needs outbound access, set
+# egress_cidr_blocks in the environment's tfvars rather than reopening
+# 0.0.0.0/0 on all ports here.
+resource "aws_security_group_rule" "egress_scoped" {
+  count             = length(var.egress_cidr_blocks) > 0 ? 1 : 0
   type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
   security_group_id = aws_security_group.this.id
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = var.egress_cidr_blocks
+  description       = "Explicit outbound HTTPS access (opt-in, empty by default)"
 }
 
 resource "aws_db_subnet_group" "this" {
@@ -168,22 +178,29 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [aws_security_group.this.id]
   publicly_accessible    = false
 
+  # Lets individual database users authenticate via short-lived IAM tokens
+  # instead of the shared master password, without changing how the master
+  # user itself connects. Purely additive -- see docs/decisions/0002 family
+  # for why the master credential flow stays password-based.
+  iam_database_authentication_enabled = true
+
   parameter_group_name = aws_db_parameter_group.this.name
 
-  multi_az                = var.multi_az
-  backup_retention_period = var.backup_retention_days
-  backup_window            = "03:00-04:00"
-  maintenance_window       = "sun:04:30-sun:05:30"
-  deletion_protection     = var.deletion_protection
-  skip_final_snapshot     = var.environment != "prod"
+  multi_az                  = var.multi_az
+  backup_retention_period   = var.backup_retention_days
+  backup_window             = "03:00-04:00"
+  maintenance_window        = "sun:04:30-sun:05:30"
+  deletion_protection       = var.deletion_protection
+  skip_final_snapshot       = var.environment != "prod"
   final_snapshot_identifier = var.environment == "prod" ? "${local.identifier}-final" : null
-  copy_tags_to_snapshot   = true
+  copy_tags_to_snapshot     = true
 
   monitoring_interval = var.enhanced_monitoring ? 60 : 0
   monitoring_role_arn = var.enhanced_monitoring ? aws_iam_role.enhanced_monitoring[0].arn : null
 
   performance_insights_enabled          = var.performance_insights_enabled
   performance_insights_retention_period = var.performance_insights_enabled ? 7 : null
+  performance_insights_kms_key_id       = var.performance_insights_enabled && var.kms_key_id != "" ? var.kms_key_id : null
 
   auto_minor_version_upgrade = var.environment != "prod"
   apply_immediately          = var.environment != "prod"

@@ -40,7 +40,10 @@ GROUP_ROLES: tuple[str, ...] = ("db_owner", "db_app", "db_ro", "db_rw", "db_migr
 ROLE_SUFFIXES: tuple[str, ...] = ("owner", "app", "ro", "rw", "migration", "monitor")
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
-_env = Environment(
+_env = Environment(  # nosec B701 -- these templates render SQL (roles.sql.j2), not HTML/XML;
+    # autoescape would HTML-escape quotes and other SQL syntax and corrupt the
+    # generated statements. Values interpolated into the templates are
+    # generated identifiers/credentials, not untrusted request text.
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     undefined=StrictUndefined,
     trim_blocks=True,

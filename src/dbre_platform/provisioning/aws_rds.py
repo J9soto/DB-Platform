@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
+import subprocess  # nosec B404 -- shells out to the `terraform` binary by design; PATH presence is checked before use
 from pathlib import Path
 
 from dbre_platform.config.models import DatabaseRequest
@@ -97,7 +97,7 @@ class AwsRdsProvisioner(Provisioner):
                 "or use --mode local for the no-AWS-account demo path."
             )
         logger.info("running terraform", extra={"args": args, "cwd": str(env_dir)})
-        return subprocess.run(
+        return subprocess.run(  # nosec B603,B607 -- fixed, code-built `terraform` invocation; PATH presence checked above
             ["terraform", *args],
             cwd=env_dir,
             capture_output=True,

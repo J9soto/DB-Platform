@@ -93,6 +93,12 @@ variable "kms_key_id" {
   default     = ""
 }
 
+variable "egress_cidr_blocks" {
+  description = "CIDR blocks the database's security group may reach outbound on 443/tcp. Empty by default -- RDS does not need outbound access for normal operation, so leave this empty unless a specific integration (e.g. an extension calling out to an external HTTPS endpoint) requires it."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Full resolved tag set, as produced by dbre_platform.tagging.governance.resolve_tags()."
   type        = map(string)
