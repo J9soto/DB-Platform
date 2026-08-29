@@ -88,7 +88,7 @@ variable "allowed_cidr_blocks" {
 }
 
 variable "kms_key_id" {
-  description = "KMS key for storage encryption. Empty string uses the AWS-managed default RDS key."
+  description = "KMS key (ARN) used for RDS storage encryption, Performance Insights, and the Secrets Manager master credential. Empty string (the default) makes this module provision its own dedicated customer-managed key instead of relying on the AWS-managed default -- see local.effective_kms_key_id in main.tf. Set this to an existing key's ARN (e.g. an org-wide DBRE key) to reuse one instead."
   type        = string
   default     = ""
 }

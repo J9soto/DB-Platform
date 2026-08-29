@@ -18,6 +18,32 @@ locals {
     max_connections = tostring(var.connection_limit + 20)
   }
   merged_parameters = merge(local.baseline_parameters, var.cluster_parameters)
+
+  # A customer-managed key satisfies tfsec's aws-ssm-secret-use-customer-key
+  # and aws-rds-enable-performance-insights-encryption checks, which the
+  # AWS-managed default key (the old kms_key_id == "" behavior) does not.
+  # Callers may supply their own key via var.kms_key_id (e.g. an org-wide
+  # DBRE key); otherwise this module provisions a dedicated one below.
+  effective_kms_key_id = var.kms_key_id != "" ? var.kms_key_id : aws_kms_key.this[0].arn
+}
+
+# ---------------------------------------------------------------------------
+# Customer-managed KMS key, created only when the caller doesn't supply one
+# via var.kms_key_id. Used for RDS storage encryption, Performance Insights,
+# and the Secrets Manager master credential -- see local.effective_kms_key_id.
+# ---------------------------------------------------------------------------
+resource "aws_kms_key" "this" {
+  count                   = var.kms_key_id == "" ? 1 : 0
+  description             = "Customer-managed key for ${local.identifier} (RDS storage, Performance Insights, Secrets Manager)"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+  tags                    = var.tags
+}
+
+resource "aws_kms_alias" "this" {
+  count         = var.kms_key_id == "" ? 1 : 0
+  name          = "alias/dbre-${local.identifier}"
+  target_key_id = aws_kms_key.this[0].key_id
 }
 
 # ---------------------------------------------------------------------------
@@ -34,7 +60,7 @@ resource "random_password" "master" {
 resource "aws_secretsmanager_secret" "master" {
   name        = "dbre-platform/${local.identifier}/master-credentials"
   description = "RDS master credentials for ${local.identifier}, managed by dbre-platform Terraform."
-  kms_key_id  = var.kms_key_id != "" ? var.kms_key_id : null
+  kms_key_id  = local.effective_kms_key_id
   tags        = var.tags
 }
 
@@ -168,7 +194,7 @@ resource "aws_db_instance" "this" {
   max_allocated_storage = var.max_allocated_storage_gb > 0 ? var.max_allocated_storage_gb : null
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id            = var.kms_key_id != "" ? var.kms_key_id : null
+  kms_key_id            = local.effective_kms_key_id
 
   db_name  = replace(var.name, "-", "_")
   username = "dbre_admin"
@@ -200,7 +226,7 @@ resource "aws_db_instance" "this" {
 
   performance_insights_enabled          = var.performance_insights_enabled
   performance_insights_retention_period = var.performance_insights_enabled ? 7 : null
-  performance_insights_kms_key_id       = var.performance_insights_enabled && var.kms_key_id != "" ? var.kms_key_id : null
+  performance_insights_kms_key_id       = var.performance_insights_enabled ? local.effective_kms_key_id : null
 
   auto_minor_version_upgrade = var.environment != "prod"
   apply_immediately          = var.environment != "prod"

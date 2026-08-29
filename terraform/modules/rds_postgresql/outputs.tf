@@ -22,3 +22,8 @@ output "master_secret_arn" {
 output "parameter_group_name" {
   value = aws_db_parameter_group.this.name
 }
+
+output "kms_key_id" {
+  description = "The KMS key actually in use -- either the caller-supplied var.kms_key_id or the key this module provisioned for itself."
+  value       = local.effective_kms_key_id
+}
