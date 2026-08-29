@@ -24,12 +24,24 @@ isn't available is worse than one that reports per-extension success.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from dbre_platform.config.models import DatabaseRequest
+from dbre_platform.exceptions import ConfigurationError
+
+# Extension names come straight from the database request's config file
+# (DatabaseRequest.spec.extensions is an unconstrained list[str] -- see
+# dbre_platform.config.models) and are used directly in a CREATE EXTENSION
+# statement, which takes an identifier, not a bind parameter. Validating
+# against this allowlist before use is what makes the f-string
+# interpolation in render_extension_statements below safe. Real Postgres
+# extension names are lowercase and may contain underscores or hyphens
+# (e.g. "pg_stat_statements", "uuid-ossp").
+_SAFE_EXTENSION_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _env = Environment(  # nosec B701 -- these templates render SQL (database_settings.sql.j2), not
@@ -116,4 +128,11 @@ def render_extension_statements(request: DatabaseRequest) -> list[str]:
     ``PostgresBootstrapper.apply_extensions``) so one unavailable extension
     doesn't block the rest of provisioning.
     """
-    return [f'CREATE EXTENSION IF NOT EXISTS "{ext}";' for ext in request.spec.extensions]
+    statements = []
+    for ext in request.spec.extensions:
+        if not _SAFE_EXTENSION_NAME_RE.match(ext):
+            raise ConfigurationError(f"Refusing to enable unsafe extension name: {ext!r}")
+        statements.append(
+            f'CREATE EXTENSION IF NOT EXISTS "{ext}";'  # nosec B608 -- ext validated immediately above
+        )
+    return statements

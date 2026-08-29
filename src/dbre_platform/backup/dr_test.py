@@ -19,6 +19,7 @@ measured wall-clock time compared against the SLO's ``recovery_rto_hours``).
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -26,6 +27,14 @@ from dataclasses import dataclass, field
 from dbre_platform.backup.local_backup import BackupMetadata, LocalBackupManager
 from dbre_platform.exceptions import BackupError, ExecutorError
 from dbre_platform.postgres.executor import ConnectionParams, PsqlExecutor
+
+# The restore database name is built from a caller-supplied prefix plus a
+# random suffix (see run_dr_test below) and used directly in CREATE/DROP
+# DATABASE statements. Those take an identifier, not a bind parameter, so
+# there's no driver-level parameterization available (psql is invoked via
+# subprocess -- see ADR 0002). Validating against this allowlist before use
+# is what makes the f-string interpolation on those statements safe.
+_SAFE_DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 
 
 @dataclass(frozen=True)
@@ -88,6 +97,8 @@ def run_dr_test(
     manager = backup_manager or LocalBackupManager()
     verification_queries = verification_queries or ["SELECT 1"]
     restore_dbname = f"{restore_db_prefix}_{uuid.uuid4().hex[:8]}"
+    if not _SAFE_DB_NAME_RE.match(restore_dbname):
+        raise ExecutorError(f"Refusing to use unsafe restore database name: {restore_dbname!r}")
     started_at = time.monotonic()
     steps: list[DrTestStep] = []
 
@@ -125,7 +136,9 @@ def run_dr_test(
     # Step 3: create a throwaway target database on the same server
     step_start = time.monotonic()
     admin_executor = PsqlExecutor(source_params)
-    create_result = admin_executor.run_sql(f'CREATE DATABASE "{restore_dbname}";')
+    create_result = admin_executor.run_sql(  # nosec B608 -- restore_dbname validated above
+        f'CREATE DATABASE "{restore_dbname}";'
+    )
     steps.append(
         DrTestStep(
             "Create restore target database",
@@ -182,7 +195,9 @@ def run_dr_test(
     finally:
         # Step 6: always clean up the throwaway database, pass or fail
         step_start = time.monotonic()
-        drop_result = admin_executor.run_sql(f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);')
+        drop_result = admin_executor.run_sql(  # nosec B608 -- restore_dbname validated above
+            f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);'
+        )
         steps.append(
             DrTestStep(
                 "Clean up restore target",
