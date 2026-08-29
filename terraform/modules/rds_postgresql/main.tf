@@ -65,7 +65,7 @@ resource "aws_secretsmanager_secret" "master" {
 }
 
 resource "aws_secretsmanager_secret_version" "master" {
-  secret_id     = aws_secretsmanager_secret.master.id
+  secret_id = aws_secretsmanager_secret.master.id
   secret_string = jsonencode({
     username = "dbre_admin"
     password = random_password.master.result
@@ -234,7 +234,7 @@ resource "aws_db_instance" "this" {
   tags = var.tags
 
   lifecycle {
-    prevent_destroy = false # the platform's own guardrail is policy + deletion_protection, not a TF lifecycle block a plan could silently hit
+    prevent_destroy = false      # the platform's own guardrail is policy + deletion_protection, not a TF lifecycle block a plan could silently hit
     ignore_changes  = [password] # rotated out-of-band via Secrets Manager, not by re-running terraform apply
   }
 }

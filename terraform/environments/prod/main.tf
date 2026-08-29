@@ -35,10 +35,10 @@ module "database" {
   instance_class               = var.instance_class
   allocated_storage_gb         = var.allocated_storage_gb
   max_allocated_storage_gb     = var.max_allocated_storage_gb
-  multi_az                     = true  # non-negotiable in prod - see policies/environments/prod.yaml
+  multi_az                     = true # non-negotiable in prod - see policies/environments/prod.yaml
   backup_retention_days        = var.backup_retention_days
-  deletion_protection          = true  # non-negotiable in prod
-  enhanced_monitoring          = true  # non-negotiable in prod
+  deletion_protection          = true # non-negotiable in prod
+  enhanced_monitoring          = true # non-negotiable in prod
   performance_insights_enabled = true
   connection_limit             = var.connection_limit
   cluster_parameters           = var.cluster_parameters

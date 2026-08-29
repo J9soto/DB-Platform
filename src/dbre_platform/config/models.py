@@ -136,7 +136,7 @@ class DatabaseSpec(BaseModel):
 
     approvals: list[Approval] = Field(default_factory=list)
 
-    slo: SLOTargets = Field(default_factory=SLOTargets)
+    slo: SLOTargets = Field(default_factory=lambda: SLOTargets())
 
     @field_validator("engine_version")
     @classmethod
@@ -172,7 +172,7 @@ class DatabaseRequest(BaseModel):
     api_version: Literal["dbre.platform/v1"] = Field("dbre.platform/v1", alias="apiVersion")
     kind: Literal["DatabaseRequest"] = "DatabaseRequest"
     metadata: RequestMetadata
-    spec: DatabaseSpec = Field(default_factory=DatabaseSpec)
+    spec: DatabaseSpec = Field(default_factory=lambda: DatabaseSpec())
 
     # NOTE: whether production requires N approvals, minimum backup retention,
     # multi-AZ, etc. is deliberately NOT enforced here. Those are *policy*
