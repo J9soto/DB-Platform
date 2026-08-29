@@ -212,10 +212,17 @@ resource "aws_db_instance" "this" {
 
   parameter_group_name = aws_db_parameter_group.this.name
 
-  multi_az                  = var.multi_az
-  backup_retention_period   = var.backup_retention_days
-  backup_window             = "03:00-04:00"
-  maintenance_window        = "sun:04:30-sun:05:30"
+  multi_az                = var.multi_az
+  backup_retention_period = var.backup_retention_days
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:30-sun:05:30"
+  # deletion_protection is threaded through var.deletion_protection, so tfsec
+  # can't resolve it to a literal across the module boundary and flags this
+  # line regardless of what callers actually pass. environments/prod/main.tf
+  # hardcodes deletion_protection = true (non-negotiable); environments/dev/main.tf
+  # intentionally leaves it caller-controlled because dev databases are
+  # deliberately disposable.
+  #tfsec:ignore:aws-rds-enable-deletion-protection
   deletion_protection       = var.deletion_protection
   skip_final_snapshot       = var.environment != "prod"
   final_snapshot_identifier = var.environment == "prod" ? "${local.identifier}-final" : null
@@ -224,6 +231,11 @@ resource "aws_db_instance" "this" {
   monitoring_interval = var.enhanced_monitoring ? 60 : 0
   monitoring_role_arn = var.enhanced_monitoring ? aws_iam_role.enhanced_monitoring[0].arn : null
 
+  # performance_insights_enabled is threaded through var.performance_insights_enabled
+  # for the same reason -- tfsec can't see through the module boundary.
+  # environments/prod/main.tf hardcodes this to true; environments/dev/main.tf
+  # disables it to avoid the extra cost on a disposable database.
+  #tfsec:ignore:aws-rds-enable-performance-insights
   performance_insights_enabled          = var.performance_insights_enabled
   performance_insights_retention_period = var.performance_insights_enabled ? 7 : null
   performance_insights_kms_key_id       = var.performance_insights_enabled ? local.effective_kms_key_id : null
