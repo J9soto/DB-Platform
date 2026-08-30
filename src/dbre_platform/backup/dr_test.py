@@ -136,8 +136,9 @@ def run_dr_test(
     # Step 3: create a throwaway target database on the same server
     step_start = time.monotonic()
     admin_executor = PsqlExecutor(source_params)
-    create_result = admin_executor.run_sql(  # nosec B608 -- restore_dbname validated above
-        f'CREATE DATABASE "{restore_dbname}";'
+    # restore_dbname validated above.
+    create_result = admin_executor.run_sql(
+        f'CREATE DATABASE "{restore_dbname}";'  # nosec
     )
     steps.append(
         DrTestStep(
@@ -195,8 +196,9 @@ def run_dr_test(
     finally:
         # Step 6: always clean up the throwaway database, pass or fail
         step_start = time.monotonic()
-        drop_result = admin_executor.run_sql(  # nosec B608 -- restore_dbname validated above
-            f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);'
+        # restore_dbname validated above.
+        drop_result = admin_executor.run_sql(
+            f'DROP DATABASE IF EXISTS "{restore_dbname}" WITH (FORCE);'  # nosec
         )
         steps.append(
             DrTestStep(

@@ -21,7 +21,9 @@ from __future__ import annotations
 import re
 import secrets
 import shutil
-import subprocess  # nosec B404 -- shells out to `docker compose` by design; PATH presence is checked before use
+
+# Shells out to `docker compose` by design; PATH presence is checked before use.
+import subprocess  # nosec B404
 import time
 from pathlib import Path
 
@@ -110,7 +112,8 @@ class LocalDockerProvisioner(Provisioner):
             "postgres",
         ]
         logger.info("starting local postgres container", extra={"command": " ".join(cmd)})
-        result = subprocess.run(  # nosec B603,B607 -- fixed, code-built `docker compose` invocation; PATH presence checked above
+        # Fixed, code-built `docker compose` invocation; PATH presence checked above.
+        result = subprocess.run(  # nosec
             cmd, capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0:
@@ -141,12 +144,14 @@ class LocalDockerProvisioner(Provisioner):
             # _SAFE_DB_NAME_RE's docstring comment above. Refusing outright rather
             # than escaping keeps this a hard boundary, not a best-effort filter.
             raise ProvisioningError(f"Refusing to use unsafe database name: {db_name!r}")
-        exists = admin_executor.run_sql(  # nosec B608 -- db_name validated immediately above
-            f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"
+        # db_name validated immediately above.
+        exists = admin_executor.run_sql(
+            f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"  # nosec
         )
         if "1 row" not in exists.stdout and "(1 row)" not in exists.stdout:
-            create_result = admin_executor.run_sql(  # nosec B608 -- db_name validated above
-                f'CREATE DATABASE "{db_name}";'
+            # db_name validated above.
+            create_result = admin_executor.run_sql(
+                f'CREATE DATABASE "{db_name}";'  # nosec
             )
             if not create_result.success:
                 raise ProvisioningError(f"Failed to create database {db_name}: {create_result.stderr}")

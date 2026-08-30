@@ -26,10 +26,12 @@ module "database" {
   allocated_storage_gb  = var.allocated_storage_gb
   multi_az              = var.multi_az
   backup_retention_days = var.backup_retention_days
-  #tfsec:ignore:aws-rds-enable-deletion-protection -- dev is deliberately disposable; var.deletion_protection lets an operator tear it down without a manual RDS console override. Prod hardcodes true (see environments/prod/main.tf) and that value is non-negotiable.
+  # dev is deliberately disposable; var.deletion_protection lets an operator tear it down without a manual RDS console override. Prod hardcodes true (see environments/prod/main.tf) and that value is non-negotiable.
+  # (tfsec's aws-rds-enable-deletion-protection check is suppressed at its actual source -- modules/rds_postgresql/main.tf -- since tfsec attributes the finding to the module's resource, not this call site.)
   deletion_protection = var.deletion_protection
   enhanced_monitoring = var.enhanced_monitoring
-  #tfsec:ignore:aws-rds-enable-performance-insights -- not worth the extra cost for a disposable dev database; prod hardcodes this to true.
+  # Not worth the extra cost for a disposable dev database; prod hardcodes this to true.
+  # (tfsec's aws-rds-enable-performance-insights check is suppressed at its actual source -- modules/rds_postgresql/main.tf.)
   performance_insights_enabled = false
   connection_limit             = var.connection_limit
   cluster_parameters           = var.cluster_parameters

@@ -132,7 +132,8 @@ def render_extension_statements(request: DatabaseRequest) -> list[str]:
     for ext in request.spec.extensions:
         if not _SAFE_EXTENSION_NAME_RE.match(ext):
             raise ConfigurationError(f"Refusing to enable unsafe extension name: {ext!r}")
+        # ext validated immediately above.
         statements.append(
-            f'CREATE EXTENSION IF NOT EXISTS "{ext}";'  # nosec B608 -- ext validated immediately above
+            f'CREATE EXTENSION IF NOT EXISTS "{ext}";'  # nosec
         )
     return statements
