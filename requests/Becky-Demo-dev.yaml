@@ -1,0 +1,14 @@
+apiVersion: dbre.platform/v1
+kind: DatabaseRequest
+metadata:
+  name: Becky-Demo
+  environment: dev
+  owner: Becky
+  cost_center: CC-1
+  data_classification: internal
+spec:
+  platform: local
+  storage_gb: 20
+  extensions:
+    - pg_stat_statements
+    - pgaudit
