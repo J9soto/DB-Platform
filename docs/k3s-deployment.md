@@ -1,6 +1,8 @@
 # K3s deployment guide
 
 The operational companion to [`docs/k3s-migration-plan.md`](k3s-migration-plan.md).
+For a copy-pasteable click-by-click walkthrough with verification at every
+stage, see [`docs/k3s-manual-test.md`](k3s-manual-test.md).
 This is how to stand up and run DB-Platform's **K3s mode**
 (`spec.platform: k3s`), where PostgreSQL is provisioned as a
 [CloudNativePG](https://cloudnative-pg.io/) `Cluster` instead of a Docker
