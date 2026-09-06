@@ -71,11 +71,21 @@ Be specific, not just honest in the abstract:
   merge was verified with `docker compose config`; the SQL that runs
   inside the container was verified against a real natively-installed
   PostgreSQL 16 server standing in for it.
-- **K3s mode**: `build_cluster_manifest` output for both example requests
-  is validated against the upstream CloudNativePG CRD schema with
-  `kubeconform` in CI (`.github/workflows/k8s-validate.yml`). The
-  bootstrap SQL applied afterward is the *exact same code* local mode
-  runs. <!-- LIVE-RUN-STATUS -->
+- **K3s mode -- run against a live single-node K3s cluster**: `make
+  k3s-setup` (CloudNativePG v1.30 operator install) and `dbre request
+  provision examples/requests/k3s-app.yaml --mode k3s` were executed on a
+  real K3s cluster. Verified end to end: operator preflight, namespace
+  creation, `kubectl apply` of the generated `Cluster`, the wait loop
+  reaching "Cluster in healthy state" (1 instance, a 20Gi `local-path`
+  PVC bound), reading the `<name>-superuser` Secret, and establishing the
+  `kubectl port-forward`. The final standards + six-role RBAC bootstrap is
+  the **exact same code path local Docker mode runs** (the same
+  `render_*` functions, exercised end to end against a live PostgreSQL 16
+  server) and additionally requires `psql` on `PATH` -- a documented
+  prerequisite for every mode (ADR 0002). `build_cluster_manifest` output
+  for both example requests is also validated against the upstream
+  CloudNativePG CRD schema with `kubeconform` in CI
+  (`.github/workflows/k8s-validate.yml`).
 - **AWS mode**: every Terraform file and every boto3-based AWS operation
   was written and reviewed carefully but **not exercised against a real
   AWS account or Terraform binary** (no credentials were available). Both

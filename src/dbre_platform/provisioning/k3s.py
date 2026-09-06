@@ -299,6 +299,14 @@ class K3sProvisioner(Provisioner):
         if not _SAFE_DB_NAME_RE.match(db_name):  # pragma: no cover - unreachable given Pydantic
             raise ProvisioningError(f"Refusing to use unsafe database name: {db_name!r}")
 
+        if shutil.which("psql") is None:
+            raise ProvisioningError(
+                "The CNPG Cluster is up, but `psql` was not found on PATH to apply the "
+                "standards + RBAC bootstrap. Install the PostgreSQL client tools "
+                "(e.g. `apt-get install postgresql-client`) and re-run `dbre request provision`; "
+                "the Cluster already exists, so this is safe to retry."
+            )
+
         admin_executor = PsqlExecutor(admin_params)
         self._wait_for_connection(admin_executor)
 
@@ -354,7 +362,9 @@ class K3sProvisioner(Provisioner):
         self._ensure_namespace(namespace)
 
         manifest = build_cluster_manifest(request, namespace=namespace)
-        logger.info("applying CNPG Cluster", extra={"name": name, "namespace": namespace})
+        # NB: "name"/"namespace" are not usable as logging `extra` keys
+        # ("name" collides with a reserved LogRecord attribute).
+        logger.info("applying CNPG Cluster", extra={"cluster": name, "target_namespace": namespace})
         self._apply(manifest, namespace)
         self._wait_until_healthy(name, namespace)
 
