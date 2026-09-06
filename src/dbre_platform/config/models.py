@@ -21,7 +21,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Environment = Literal["dev", "staging", "prod"]
-Platform = Literal["local", "aws"]
+Platform = Literal["local", "k3s", "aws"]
 DataClassification = Literal["public", "internal", "confidential", "restricted"]
 
 # The set of tag keys the platform enforces on every provisioned resource.
@@ -80,6 +80,24 @@ class SLOTargets(BaseModel):
     recovery_rto_hours: float = Field(4.0, gt=0, description="Max acceptable time to restore service.")
 
 
+class KubernetesResources(BaseModel):
+    """Pod resource requests and limits for K3s (CloudNativePG) mode.
+
+    Ignored entirely in ``local`` and ``aws`` modes -- the same way
+    ``instance_class`` is ignored in local mode. Defaults are sized for a
+    modest PostgreSQL instance sharing a single-node cluster with the
+    control plane and monitoring stack (see docs/k3s-deployment.md); tune
+    per request for anything real.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    cpu_request: str = Field("250m", description="Kubernetes CPU request, e.g. '250m' or '1'.")
+    memory_request: str = Field("256Mi", description="Kubernetes memory request, e.g. '256Mi'.")
+    cpu_limit: str = Field("1", description="Kubernetes CPU limit.")
+    memory_limit: str = Field("1Gi", description="Kubernetes memory limit.")
+
+
 class RequestMetadata(BaseModel):
     """Identity and ownership information for the request."""
 
@@ -107,12 +125,31 @@ class DatabaseSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    platform: Platform = Field("local", description="'local' (Docker) or 'aws' (RDS via Terraform).")
+    platform: Platform = Field(
+        "local",
+        description="'local' (Docker), 'k3s' (Kubernetes via CloudNativePG), or 'aws' (RDS via Terraform).",
+    )
     engine: Literal["postgres"] = "postgres"
     engine_version: str = Field("16", description="Major PostgreSQL version.")
 
-    instance_class: str = Field("db.t4g.micro", description="AWS RDS instance class. Ignored in local mode.")
+    instance_class: str = Field(
+        "db.t4g.micro", description="AWS RDS instance class. Ignored in local/k3s mode."
+    )
     storage_gb: int = Field(20, ge=20, le=65536)
+
+    # --- K3s / Kubernetes (CloudNativePG) mode -----------------------------
+    # All ignored outside k3s mode, exactly as instance_class is ignored
+    # outside aws mode. See docs/k3s-deployment.md.
+    namespace: str = Field(
+        "dbre", description="Kubernetes namespace for the CloudNativePG Cluster (k3s mode)."
+    )
+    storage_class: str | None = Field(
+        None, description="PVC storageClassName (k3s mode). None uses the cluster default."
+    )
+    instances: int = Field(
+        1, ge=1, le=5, description="CloudNativePG instance count (k3s mode). multi_az bumps this to 3."
+    )
+    resources: KubernetesResources = Field(default_factory=lambda: KubernetesResources())
 
     multi_az: bool = Field(False, description="AWS Multi-AZ standby. Required by policy in prod.")
     backup_retention_days: int = Field(7, ge=0, le=35)
@@ -144,6 +181,17 @@ class DatabaseSpec(BaseModel):
         supported = {"14", "15", "16", "17"}
         if value not in supported:
             raise ValueError(f"engine_version must be one of {sorted(supported)}, got {value!r}")
+        return value
+
+    @field_validator("namespace")
+    @classmethod
+    def _valid_namespace(cls, value: str) -> str:
+        # RFC 1123 label: the platform interpolates this into kubectl args
+        # and generated manifests, so it is validated, not escaped.
+        if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", value):
+            raise ValueError(
+                f"spec.namespace must be a valid Kubernetes namespace (RFC 1123 label), got {value!r}"
+            )
         return value
 
 

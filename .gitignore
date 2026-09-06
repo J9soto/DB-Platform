@@ -33,6 +33,11 @@ backups/
 *.dump
 *.sql.bak
 
+# Kubernetes / K3s
+kubeconfig
+*.kubeconfig
+.dbre/manifests/
+
 # OS / editor
 .DS_Store
 .idea/

@@ -37,9 +37,10 @@
       "properties": {
         "platform": {
           "default": "local",
-          "description": "'local' (Docker) or 'aws' (RDS via Terraform).",
+          "description": "'local' (Docker), 'k3s' (Kubernetes via CloudNativePG), or 'aws' (RDS via Terraform).",
           "enum": [
             "local",
+            "k3s",
             "aws"
           ],
           "title": "Platform",
@@ -59,7 +60,7 @@
         },
         "instance_class": {
           "default": "db.t4g.micro",
-          "description": "AWS RDS instance class. Ignored in local mode.",
+          "description": "AWS RDS instance class. Ignored in local/k3s mode.",
           "title": "Instance Class",
           "type": "string"
         },
@@ -69,6 +70,36 @@
           "minimum": 20,
           "title": "Storage Gb",
           "type": "integer"
+        },
+        "namespace": {
+          "default": "dbre",
+          "description": "Kubernetes namespace for the CloudNativePG Cluster (k3s mode).",
+          "title": "Namespace",
+          "type": "string"
+        },
+        "storage_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PVC storageClassName (k3s mode). None uses the cluster default.",
+          "title": "Storage Class"
+        },
+        "instances": {
+          "default": 1,
+          "description": "CloudNativePG instance count (k3s mode). multi_az bumps this to 3.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Instances",
+          "type": "integer"
+        },
+        "resources": {
+          "$ref": "#/$defs/KubernetesResources"
         },
         "multi_az": {
           "default": false,
@@ -144,6 +175,38 @@
         }
       },
       "title": "DatabaseSpec",
+      "type": "object"
+    },
+    "KubernetesResources": {
+      "additionalProperties": false,
+      "description": "Pod resource requests and limits for K3s (CloudNativePG) mode.\n\nIgnored entirely in ``local`` and ``aws`` modes -- the same way\n``instance_class`` is ignored in local mode. Defaults are sized for a\nmodest PostgreSQL instance sharing a single-node cluster with the\ncontrol plane and monitoring stack (see docs/k3s-deployment.md); tune\nper request for anything real.",
+      "properties": {
+        "cpu_request": {
+          "default": "250m",
+          "description": "Kubernetes CPU request, e.g. '250m' or '1'.",
+          "title": "Cpu Request",
+          "type": "string"
+        },
+        "memory_request": {
+          "default": "256Mi",
+          "description": "Kubernetes memory request, e.g. '256Mi'.",
+          "title": "Memory Request",
+          "type": "string"
+        },
+        "cpu_limit": {
+          "default": "1",
+          "description": "Kubernetes CPU limit.",
+          "title": "Cpu Limit",
+          "type": "string"
+        },
+        "memory_limit": {
+          "default": "1Gi",
+          "description": "Kubernetes memory limit.",
+          "title": "Memory Limit",
+          "type": "string"
+        }
+      },
+      "title": "KubernetesResources",
       "type": "object"
     },
     "RequestMetadata": {

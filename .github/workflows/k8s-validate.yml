@@ -1,0 +1,55 @@
+name: K8s manifests
+
+# Validates the K3s-mode deployment assets: the generated CloudNativePG
+# reference manifests must be in sync with build_cluster_manifest, and
+# must validate against the upstream CRD schema. Parallel to ci.yml's
+# terraform-validate job -- this job never touches a cluster.
+on:
+  pull_request:
+    paths:
+      - "k8s/**"
+      - "src/dbre_platform/provisioning/k3s.py"
+      - "src/dbre_platform/postgres/standards.py"
+      - "src/dbre_platform/config/models.py"
+      - "automation/generate_k8s_reference.py"
+      - ".github/workflows/k8s-validate.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  k8s-manifests:
+    name: Reference manifests are current and schema-valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install the package
+        run: pip install -e ".[dev]"
+
+      - name: Confirm k8s/reference/*.yaml matches build_cluster_manifest
+        run: |
+          python automation/generate_k8s_reference.py
+          git diff --exit-code k8s/reference/ || \
+            (echo "::error::k8s/reference/*.yaml is stale -- run 'make k8s-reference' and commit the result" && exit 1)
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL -o kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform.tar.gz kubeconform
+          sudo install kubeconform /usr/local/bin/
+
+      - name: Validate manifests against the CloudNativePG CRD schema
+        run: |
+          kubeconform -strict -summary -ignore-missing-schemas \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            k8s/reference/*.yaml

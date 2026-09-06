@@ -66,7 +66,17 @@ class ReadinessAssessment:
 def _check_multi_az(request: DatabaseRequest) -> ReadinessCheck:
     is_prod = request.metadata.environment == "prod"
     passed = (not is_prod) or request.spec.multi_az
-    detail = "multi_az enabled" if request.spec.multi_az else "multi_az disabled"
+    if request.spec.platform == "k3s":
+        # On CloudNativePG, multi_az drives instances: 3 (primary + two
+        # standbys with automatic failover). On a single-node cluster this
+        # is pod-level HA only -- see docs/k3s-deployment.md.
+        detail = (
+            "multi_az -> CNPG primary + 2 standbys with automatic failover"
+            if request.spec.multi_az
+            else "multi_az disabled -- single CNPG instance, no failover"
+        )
+    else:
+        detail = "multi_az enabled" if request.spec.multi_az else "multi_az disabled"
     return ReadinessCheck("Multi-AZ failover", "reliability", 15, passed, detail)
 
 
@@ -81,14 +91,34 @@ def _check_backup_retention(request: DatabaseRequest) -> ReadinessCheck:
 def _check_deletion_protection(request: DatabaseRequest) -> ReadinessCheck:
     is_prod = request.metadata.environment == "prod"
     passed = (not is_prod) or request.spec.deletion_protection
-    detail = "enabled" if request.spec.deletion_protection else "disabled"
+    if request.spec.platform == "k3s":
+        # CNPG has no single "deletion protection" flag; the equivalent is
+        # namespace RBAC restricting who can delete the Cluster plus PVC
+        # retention on Cluster deletion (see docs/k3s-deployment.md). The
+        # request flag still records the intent.
+        detail = (
+            "intent recorded -- enforce via namespace RBAC + PVC retention"
+            if request.spec.deletion_protection
+            else "disabled"
+        )
+    else:
+        detail = "enabled" if request.spec.deletion_protection else "disabled"
     return ReadinessCheck("Deletion protection", "safety", 10, passed, detail)
 
 
 def _check_monitoring(request: DatabaseRequest) -> ReadinessCheck:
     is_prod = request.metadata.environment == "prod"
     passed = (not is_prod) or request.spec.enhanced_monitoring
-    detail = "enhanced monitoring enabled" if request.spec.enhanced_monitoring else "standard monitoring only"
+    if request.spec.platform == "k3s":
+        detail = (
+            "CNPG PodMonitor enabled (Prometheus scrape)"
+            if request.spec.enhanced_monitoring
+            else "PodMonitor disabled -- standard metrics only"
+        )
+    else:
+        detail = (
+            "enhanced monitoring enabled" if request.spec.enhanced_monitoring else "standard monitoring only"
+        )
     return ReadinessCheck("Enhanced monitoring", "observability", 10, passed, detail)
 
 

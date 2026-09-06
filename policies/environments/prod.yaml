@@ -8,13 +8,16 @@
 environment: prod
 
 rules:
-  - id: prod-platform-must-be-aws
-    description: Production databases run on managed RDS, never the local Docker demo path.
+  - id: prod-platform-supported
+    description: >
+      Production databases run on a managed/orchestrated platform -- AWS RDS
+      (Terraform) or Kubernetes via CloudNativePG (k3s) -- never the bare
+      local Docker demo path.
     field: spec.platform
-    operator: equals
-    value: aws
+    operator: in
+    value: [aws, k3s]
     severity: error
-    message: "Production requests must set spec.platform: aws (got {actual})."
+    message: "Production requests must set spec.platform to 'aws' or 'k3s' (got {actual})."
 
   - id: prod-multi-az-required
     description: Automatic failover is mandatory for anything customer-facing.

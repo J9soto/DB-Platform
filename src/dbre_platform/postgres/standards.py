@@ -83,6 +83,22 @@ class ClusterParameters:
         """Render as the shape Terraform's aws_db_parameter_group expects."""
         return [{"name": key, "value": value} for key, value in sorted(self.values.items())]
 
+    def as_cnpg_parameters(self) -> tuple[dict[str, str], list[str]]:
+        """Split into ``(postgresql.parameters, shared_preload_libraries)`` for
+        a CloudNativePG ``Cluster`` (k3s mode).
+
+        CNPG manages ``shared_preload_libraries`` through a dedicated list
+        field, not through ``spec.postgresql.parameters`` (it rejects the
+        key there), so it is pulled out and returned separately. Everything
+        else passes straight through as a string->string GUC map.
+        """
+        parameters = {
+            key: value for key, value in sorted(self.values.items()) if key != "shared_preload_libraries"
+        }
+        raw_libraries = self.values.get("shared_preload_libraries", "")
+        libraries = [lib.strip() for lib in raw_libraries.split(",") if lib.strip()]
+        return parameters, libraries
+
 
 def build_cluster_parameters(request: DatabaseRequest) -> ClusterParameters:
     preload = sorted(

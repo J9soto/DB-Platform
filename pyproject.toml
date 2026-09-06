@@ -10,7 +10,17 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Rebecca Herrera" }]
-keywords = ["dbre", "platform-engineering", "postgresql", "sre", "terraform", "policy-as-code"]
+keywords = [
+    "dbre",
+    "platform-engineering",
+    "postgresql",
+    "sre",
+    "terraform",
+    "kubernetes",
+    "k3s",
+    "cloudnative-pg",
+    "policy-as-code",
+]
 
 # Core dependencies are intentionally minimal and dependency-light.
 # The platform shells out to `psql`, `pg_dump`, `pg_restore`, `docker`, and

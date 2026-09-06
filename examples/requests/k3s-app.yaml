@@ -1,0 +1,30 @@
+# A dev-environment request targeting K3s (Kubernetes via CloudNativePG).
+# This is the runnable, self-hosted demo path -- it needs a reachable
+# cluster and the CloudNativePG operator (`make k3s-setup`), but no cloud
+# account. See docs/k3s-deployment.md.
+#
+# Try it:
+#   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+#   make k3s-setup
+#   dbre request validate examples/requests/k3s-app.yaml
+#   dbre request provision examples/requests/k3s-app.yaml --mode k3s
+apiVersion: dbre.platform/v1
+kind: DatabaseRequest
+metadata:
+  name: catalog-api
+  environment: dev
+  owner: catalog-team
+  cost_center: CC-1001
+  data_classification: internal
+spec:
+  platform: k3s
+  namespace: dbre
+  storage_gb: 20
+  instances: 1
+  extensions:
+    - pg_stat_statements
+  resources:
+    cpu_request: 100m
+    memory_request: 256Mi
+    cpu_limit: "1"
+    memory_limit: 512Mi

@@ -89,7 +89,7 @@ class TestPolicyEngineWithRealPolicies(unittest.TestCase):
         self.assertFalse(result.passed)
         violated_ids = {v.rule_id for v in result.violations}
         for expected in (
-            "prod-platform-must-be-aws",
+            "prod-platform-supported",
             "prod-multi-az-required",
             "prod-backup-retention-min",
             "prod-deletion-protection-required",
@@ -100,6 +100,18 @@ class TestPolicyEngineWithRealPolicies(unittest.TestCase):
             "prod-storage-minimum",
         ):
             self.assertIn(expected, violated_ids)
+
+    def test_prod_request_on_k3s_passes_the_platform_rule(self):
+        # k3s is an accepted production platform (CloudNativePG); only the
+        # bare local Docker path is refused for prod.
+        request = make_request(platform="k3s")
+        result = self.engine.evaluate(request)
+        self.assertNotIn("prod-platform-supported", {v.rule_id for v in result.violations})
+
+    def test_prod_request_on_local_docker_is_refused(self):
+        request = make_request(platform="local")
+        result = self.engine.evaluate(request)
+        self.assertIn("prod-platform-supported", {v.rule_id for v in result.violations})
 
     def test_dev_request_is_lenient(self):
         doc = {

@@ -69,10 +69,10 @@ def request_validate(request_file: str) -> None:
 @click.argument("request_file", type=click.Path(exists=True))
 @click.option(
     "--mode",
-    type=click.Choice(["local", "aws", "request"]),
+    type=click.Choice(["local", "k3s", "aws", "request"]),
     default="request",
     show_default=True,
-    help="'request' uses spec.platform from the file; local/aws force a mode.",
+    help="'request' uses spec.platform from the file; local/k3s/aws force a mode.",
 )
 def request_provision(request_file: str, mode: str) -> None:
     """Validate, assess readiness, and provision a database environment.
@@ -96,6 +96,10 @@ def request_provision(request_file: str, mode: str) -> None:
         from dbre_platform.provisioning.local_docker import LocalDockerProvisioner
 
         provisioner = LocalDockerProvisioner()
+    elif effective_mode == "k3s":
+        from dbre_platform.provisioning.k3s import K3sProvisioner
+
+        provisioner = K3sProvisioner()
     else:
         from dbre_platform.provisioning.aws_rds import AwsRdsProvisioner
 
