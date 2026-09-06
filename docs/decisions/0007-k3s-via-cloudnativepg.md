@@ -76,6 +76,13 @@ Reasons, in the order they mattered:
   unit-tested without a cluster (mirroring `build_tfvars` for AWS mode).
   `k8s/reference/{dev,prod}-cluster.yaml` are its committed, generated
   output and are validated against the upstream CNPG CRD schema in CI.
+- **`kubectl port-forward`'s tunnel is not reliable enough to depend on
+  naively.** On the live test host (WSL2) it carried one connection and
+  reset the next. The provisioner therefore runs the bootstrap through a
+  self-healing tunnel (`_PortForwardTunnel` + `_resilient`): a fixed
+  local port, output discarded so a full pipe can't wedge it, respawned
+  on death, and each idempotent statement retried when the failure looks
+  like a dropped tunnel rather than bad SQL.
 - **Local Docker mode and AWS mode are unchanged.** Docker mode stays as
   the minimal no-cluster path for contributors; AWS mode stays as the
   reviewed-not-run cloud reference.

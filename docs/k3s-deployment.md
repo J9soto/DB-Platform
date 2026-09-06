@@ -56,9 +56,12 @@ dbre backup create catalog-api-dev --dbname catalog_api
 dbre dr-test run catalog-api-dev --dbname catalog_api
 ```
 
-The provisioner itself uses a short-lived, ephemeral-port `kubectl
-port-forward` internally and tears it down when it's done; the commands
-above are for interactive use afterward.
+The provisioner itself runs a short-lived, fixed-port `kubectl
+port-forward` internally, **self-healing** -- it respawns the forward and
+retries the (idempotent) statement if the SPDY tunnel drops, which it
+does on some hosts (observed on WSL2). For your own interactive sessions,
+if `psql` reports "connection refused" or "server closed the connection"
+mid-session, just restart the `kubectl port-forward` and reconnect.
 
 ## How request fields map to the `Cluster`
 

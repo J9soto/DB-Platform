@@ -71,19 +71,24 @@ Be specific, not just honest in the abstract:
   merge was verified with `docker compose config`; the SQL that runs
   inside the container was verified against a real natively-installed
   PostgreSQL 16 server standing in for it.
-- **K3s mode -- run against a live single-node K3s cluster**: `make
-  k3s-setup` (CloudNativePG v1.30 operator install) and `dbre request
-  provision examples/requests/k3s-app.yaml --mode k3s` were executed on a
-  real K3s cluster. Verified end to end: operator preflight, namespace
+- **K3s mode -- run end to end against a live single-node K3s cluster
+  (on WSL2)**: `make k3s-setup` (CloudNativePG v1.30 operator) followed by
+  `dbre request provision examples/requests/k3s-app.yaml --mode k3s`
+  completed successfully. Verified: operator preflight, namespace
   creation, `kubectl apply` of the generated `Cluster`, the wait loop
-  reaching "Cluster in healthy state" (1 instance, a 20Gi `local-path`
-  PVC bound), reading the `<name>-superuser` Secret, and establishing the
-  `kubectl port-forward`. The final standards + six-role RBAC bootstrap is
-  the **exact same code path local Docker mode runs** (the same
-  `render_*` functions, exercised end to end against a live PostgreSQL 16
-  server) and additionally requires `psql` on `PATH` -- a documented
-  prerequisite for every mode (ADR 0002). `build_cluster_manifest` output
-  for both example requests is also validated against the upstream
+  reaching "Cluster in healthy state" (a 20Gi `local-path` PVC bound),
+  reading the `<name>-superuser` Secret, `CREATE DATABASE`, `CREATE
+  EXTENSION`, the per-database `ALTER DATABASE` settings, and the full
+  six-role RBAC script -- all 12 roles (`db_*` groups + `catalog_api_*`
+  logins) confirmed present in the database afterward, and a `success`
+  event in the audit log. The standards + RBAC step is the **exact same
+  code local Docker mode runs** (the same `render_*` functions); it needs
+  `psql` on `PATH`, a documented prerequisite for every mode (ADR 0002).
+  `kubectl port-forward`'s SPDY tunnel proved flaky on this host (it
+  reset between connections), so the provisioner runs each bootstrap
+  statement through a self-healing tunnel that respawns the forward and
+  retries the idempotent statement. `build_cluster_manifest` output for
+  both example requests is also validated against the upstream
   CloudNativePG CRD schema with `kubeconform` in CI
   (`.github/workflows/k8s-validate.yml`).
 - **AWS mode**: every Terraform file and every boto3-based AWS operation

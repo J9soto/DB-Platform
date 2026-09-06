@@ -1,9 +1,10 @@
 import unittest
+from dataclasses import dataclass
 
 import yaml
 
 from dbre_platform.config.models import DatabaseRequest
-from dbre_platform.provisioning.k3s import build_cluster_manifest
+from dbre_platform.provisioning.k3s import _PortForwardTunnel, _resilient, build_cluster_manifest
 
 
 def make_request(**spec_overrides) -> DatabaseRequest:
@@ -100,6 +101,80 @@ class TestBuildClusterManifest(unittest.TestCase):
         labels = build_cluster_manifest(make_request())["metadata"]["labels"]
         self.assertEqual(labels["dbre.platform/environment"], "dev")
         self.assertEqual(labels["app.kubernetes.io/managed-by"], "dbre-platform")
+
+
+@dataclass
+class _FakeResult:
+    success: bool
+    stderr: str = ""
+    stdout: str = ""
+
+
+class _FakeTunnel:
+    def __init__(self):
+        self.ensured = 0
+
+    def ensure(self, **_):
+        self.ensured += 1
+
+
+class TestResilient(unittest.TestCase):
+    def test_returns_immediately_on_success(self):
+        tunnel = _FakeTunnel()
+        calls = []
+
+        def call():
+            calls.append(1)
+            return _FakeResult(success=True)
+
+        result = _resilient(tunnel, call, sleep=lambda _: None)
+        self.assertTrue(result.success)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(tunnel.ensured, 1)
+
+    def test_does_not_retry_a_real_sql_error(self):
+        tunnel = _FakeTunnel()
+        calls = []
+
+        def call():
+            calls.append(1)
+            return _FakeResult(success=False, stderr='ERROR: syntax error at or near "FROM"')
+
+        result = _resilient(tunnel, call, sleep=lambda _: None)
+        self.assertFalse(result.success)
+        self.assertEqual(len(calls), 1)  # not retried -- it's bad SQL, not a dropped tunnel
+
+    def test_retries_a_dropped_tunnel_then_succeeds(self):
+        tunnel = _FakeTunnel()
+        outcomes = [
+            _FakeResult(success=False, stderr="psql: error: connection to server ... Connection refused"),
+            _FakeResult(success=False, stderr="server closed the connection unexpectedly"),
+            _FakeResult(success=True),
+        ]
+
+        result = _resilient(tunnel, lambda: outcomes.pop(0), attempts=5, sleep=lambda _: None)
+        self.assertTrue(result.success)
+        self.assertEqual(tunnel.ensured, 3)  # re-ensured the tunnel before each attempt
+
+    def test_gives_up_after_attempts_and_returns_last_failure(self):
+        tunnel = _FakeTunnel()
+        result = _resilient(
+            tunnel,
+            lambda: _FakeResult(success=False, stderr="Connection refused"),
+            attempts=3,
+            sleep=lambda _: None,
+        )
+        self.assertFalse(result.success)
+        self.assertEqual(tunnel.ensured, 3)
+
+
+class TestPortForwardTunnel(unittest.TestCase):
+    def test_picks_a_plausible_free_local_port_without_spawning_kubectl(self):
+        tunnel = _PortForwardTunnel("dbre", "catalog-api-rw")
+        self.assertGreater(tunnel.local_port, 1024)
+        self.assertLessEqual(tunnel.local_port, 65535)
+        self.assertIsNone(tunnel._proc)  # constructor does not spawn
+        tunnel.close()  # no-op when nothing was spawned
 
 
 if __name__ == "__main__":

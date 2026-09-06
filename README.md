@@ -287,14 +287,15 @@ value the moment it fakes something. So, plainly:
   registry access this build environment didn't have -- the SQL that
   would run inside that container was separately verified against a
   real server standing in for it).
-- **K3s mode -- run against a live single-node K3s cluster**: the CNPG
-  operator install and `dbre request provision --mode k3s` were executed
-  on a real cluster; verified through `Cluster` healthy + PVC bound +
-  Secret read + port-forward. `build_cluster_manifest` output is
-  validated against the upstream CloudNativePG CRD schema (`kubeconform`)
-  in CI, and the standards/RBAC bootstrap is the exact code local mode
-  runs. Full accounting in
-  [`docs/local-vs-aws.md`](docs/local-vs-aws.md).
+- **K3s mode -- run end to end against a live single-node K3s cluster**:
+  `make k3s-setup` + `dbre request provision --mode k3s` completed
+  against a real cluster -- `Cluster` healthy, `CREATE DATABASE`,
+  extensions, `ALTER DATABASE` settings, and the full six-role RBAC
+  script all applied, all 12 roles verified in the database, `success` in
+  the audit log. `build_cluster_manifest` output is validated against the
+  upstream CloudNativePG CRD schema (`kubeconform`) in CI, and the
+  standards/RBAC step is the exact code local mode runs. Full accounting
+  in [`docs/local-vs-aws.md`](docs/local-vs-aws.md).
 - **Written and reviewed carefully, but not exercised against a real
   AWS account or Terraform binary**: the Terraform module and every
   boto3-based AWS operation. Both say so explicitly in their own

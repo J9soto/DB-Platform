@@ -33,11 +33,14 @@ from __future__ import annotations
 import base64
 import re
 import shutil
+import socket
 
 # Shells out to `kubectl` by design (see module docstring / ADR 0002); PATH
 # presence is checked before use.
 import subprocess  # nosec B404
 import time
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +71,113 @@ HEALTHY_PHASE = "Cluster in healthy state"
 # underscores. psql is invoked via subprocess (ADR 0002), so there is no
 # driver-level parameter binding for CREATE DATABASE.
 _SAFE_DB_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+
+# Substrings that mark a psql failure as "the tunnel dropped", not "the SQL
+# was wrong" -- worth respawning the port-forward and retrying an
+# idempotent statement. `kubectl port-forward`'s SPDY tunnel is known to be
+# fragile (especially on WSL2 / some CNIs): it can carry one connection
+# fine and then reset the next.
+_TUNNEL_ERROR_MARKERS = (
+    "connection refused",
+    "could not connect",
+    "server closed the connection",
+    "connection reset",
+    "lost connection",
+    "terminating connection",
+    "no route to host",
+)
+
+
+class _PortForwardTunnel:
+    """A self-healing ``kubectl port-forward`` to a Service.
+
+    Binds a fixed local port up front (so nothing has to be parsed out of
+    kubectl's stdout), runs the forward with its output discarded (so a
+    full pipe buffer can never wedge it), and ``ensure()`` respawns the
+    process if it has died and blocks until the local port actually
+    accepts a TCP connection.
+    """
+
+    def __init__(self, namespace: str, service: str, *, remote_port: int = 5432) -> None:
+        self.namespace = namespace
+        self.service = service
+        self.remote_port = remote_port
+        self.local_port = self._free_local_port()
+        self._proc: subprocess.Popen | None = None
+
+    @staticmethod
+    def _free_local_port() -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            return int(probe.getsockname()[1])
+
+    def _spawn(self) -> None:
+        # Fixed, code-built `kubectl` invocation; output discarded so the
+        # process can never block on a full stdout pipe.
+        self._proc = subprocess.Popen(  # nosec
+            [
+                "kubectl",
+                "port-forward",
+                "-n",
+                self.namespace,
+                f"svc/{self.service}",
+                f"{self.local_port}:{self.remote_port}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def ensure(self, *, timeout_seconds: int = 45) -> None:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if self._proc is None or self._proc.poll() is not None:
+                self._spawn()
+                time.sleep(1)
+            try:
+                with socket.create_connection(("127.0.0.1", self.local_port), timeout=2):
+                    return
+            except OSError:
+                time.sleep(1)
+        raise ProvisioningError(
+            f"Could not establish a stable `kubectl port-forward` to svc/{self.service} in "
+            f"namespace {self.namespace} within {timeout_seconds}s. Run it by hand "
+            f"(`kubectl port-forward -n {self.namespace} svc/{self.service} 5432:5432`) and "
+            "re-run `dbre request provision` -- the Cluster already exists, so retrying is safe."
+        )
+
+    def close(self) -> None:
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+                self._proc.kill()
+
+
+def _resilient(
+    tunnel: _PortForwardTunnel,
+    call: Callable[[], Any],
+    *,
+    attempts: int = 4,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Any:
+    """Run a ``PsqlExecutor`` call, respawning the tunnel and retrying when
+    the failure looks like a dropped port-forward rather than bad SQL.
+
+    Every statement the bootstrap runs is idempotent (existence-checked
+    ``CREATE DATABASE``, ``CREATE EXTENSION IF NOT EXISTS``,
+    ``ALTER DATABASE``, the ``IF NOT EXISTS`` role script), so a retry
+    after a mid-statement tunnel reset is safe.
+    """
+    last: Any = None
+    for attempt in range(attempts):
+        tunnel.ensure()
+        last = call()
+        stderr = (getattr(last, "stderr", "") or "").lower()
+        if getattr(last, "success", True) or not any(m in stderr for m in _TUNNEL_ERROR_MARKERS):
+            return last
+        sleep(2 * (attempt + 1))
+    return last
 
 
 def _image_for(engine_version: str) -> str:
@@ -249,46 +359,16 @@ class K3sProvisioner(Provisioner):
             )
         return base64.b64decode(result.stdout.strip()).decode("utf-8")
 
-    # -- port-forward ---------------------------------------------------
-
-    def _start_port_forward(self, name: str, namespace: str) -> tuple[subprocess.Popen, int]:
-        """Start ``kubectl port-forward`` to the -rw Service on a random local
-        port and return the process handle plus the parsed local port."""
-        if shutil.which("kubectl") is None:  # pragma: no cover - covered by _kubectl
-            raise ProvisioningError("`kubectl` was not found on PATH.")
-        # Fixed, code-built invocation; ":5432" asks kubectl to pick a free local port.
-        proc = subprocess.Popen(  # nosec
-            ["kubectl", "port-forward", "-n", namespace, f"svc/{name}-rw", ":5432"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        deadline = time.monotonic() + 30
-        if proc.stdout is None:  # pragma: no cover - stdout=PIPE is always set above
-            proc.terminate()
-            raise ProvisioningError("Could not capture `kubectl port-forward` output.")
-        while time.monotonic() < deadline:
-            line = proc.stdout.readline()
-            if not line:
-                if proc.poll() is not None:
-                    break
-                continue
-            match = re.search(r"Forwarding from 127\.0\.0\.1:(\d+) -> 5432", line)
-            if match:
-                return proc, int(match.group(1))
-        proc.terminate()
-        raise ProvisioningError(
-            "Could not establish `kubectl port-forward` to the CNPG Cluster. Run it by hand "
-            f"(`kubectl port-forward -n {namespace} svc/{name}-rw 5432:5432`) and retry with "
-            "DBRE_PG_* pointed at localhost."
-        )
-
     # -- bootstrap ----------------------------------------------------
 
     def _bootstrap_postgres(
-        self, request: DatabaseRequest, admin_params: ConnectionParams
+        self,
+        request: DatabaseRequest,
+        superuser_password: str,
+        tunnel: _PortForwardTunnel,
     ) -> tuple[list[str], Path]:
-        """Run the same standards + RBAC bootstrap local Docker mode runs.
+        """Run the same standards + RBAC bootstrap local Docker mode runs,
+        over a self-healing ``kubectl port-forward``.
 
         Kept as a local copy of the ~15-line call sequence rather than a
         shared helper for now (see docs/k3s-migration-plan.md follow-up);
@@ -307,12 +387,25 @@ class K3sProvisioner(Provisioner):
                 "the Cluster already exists, so this is safe to retry."
             )
 
+        admin_params = ConnectionParams(
+            host="127.0.0.1",
+            port=tunnel.local_port,
+            user="postgres",
+            password=superuser_password,
+            dbname="postgres",
+            sslmode="prefer",
+        )
         admin_executor = PsqlExecutor(admin_params)
-        self._wait_for_connection(admin_executor)
 
-        exists = admin_executor.run_sql(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';")  # nosec
+        # db_name validated against _SAFE_DB_NAME_RE above; psql is a
+        # subprocess (ADR 0002) so there is no bind-parameter path for these.
+        exists_sql = f"SELECT 1 FROM pg_database WHERE datname = '{db_name}';"  # nosec B608
+        exists = _resilient(tunnel, partial(admin_executor.run_sql, exists_sql))
+        if not exists.success:
+            raise ProvisioningError(f"Could not query the CNPG Cluster: {exists.stderr.strip()}")
         if "1 row" not in exists.stdout and "(1 row)" not in exists.stdout:
-            created = admin_executor.run_sql(f'CREATE DATABASE "{db_name}";')  # nosec
+            create_sql = f'CREATE DATABASE "{db_name}";'  # nosec B608
+            created = _resilient(tunnel, partial(admin_executor.run_sql, create_sql))
             if not created.success:
                 raise ProvisioningError(f"Failed to create database {db_name}: {created.stderr}")
 
@@ -321,17 +414,20 @@ class K3sProvisioner(Provisioner):
 
         messages = [f"Database '{db_name}' ready in CNPG Cluster {request.metadata.name}."]
         for statement in render_extension_statements(request):
-            outcome = scoped_executor.run_sql(statement)
+            outcome = _resilient(tunnel, partial(scoped_executor.run_sql, statement))
             status = "OK" if outcome.success else f"SKIPPED ({outcome.stderr.strip()})"
             messages.append(f"  extension: {statement} -> {status}")
 
-        settings_result = scoped_executor.run_script(render_database_settings_sql(request))
+        settings_result = _resilient(
+            tunnel, partial(scoped_executor.run_script, render_database_settings_sql(request))
+        )
         if not settings_result.success:
             raise ProvisioningError(f"Failed to apply database settings: {settings_result.stderr}")
 
-        app_name = db_name
-        credentials = generate_credentials(app_name)
-        rbac_result = scoped_executor.run_script(render_roles_sql(request, credentials))
+        credentials = generate_credentials(db_name)
+        rbac_result = _resilient(
+            tunnel, partial(scoped_executor.run_script, render_roles_sql(request, credentials))
+        )
         if not rbac_result.success:
             raise ProvisioningError(f"Failed to apply RBAC roles: {rbac_result.stderr}")
 
@@ -339,18 +435,6 @@ class K3sProvisioner(Provisioner):
         credentials_path.write_text("\n".join(credentials.as_env_lines()) + "\n")
         credentials_path.chmod(0o600)
         return messages, credentials_path
-
-    @staticmethod
-    def _wait_for_connection(executor: PsqlExecutor, timeout_seconds: int = 60) -> None:
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
-            if executor.check_connection():
-                return
-            time.sleep(2)
-        raise ProvisioningError(
-            "PostgreSQL in the CNPG Cluster did not accept connections over the port-forward "
-            f"within {timeout_seconds}s."
-        )
 
     # -- entry point --------------------------------------------------
 
@@ -369,23 +453,11 @@ class K3sProvisioner(Provisioner):
         self._wait_until_healthy(name, namespace)
 
         superuser_password = self._superuser_password(name, namespace)
-        port_forward, local_port = self._start_port_forward(name, namespace)
+        tunnel = _PortForwardTunnel(namespace, f"{name}-rw")
         try:
-            admin_params = ConnectionParams(
-                host="127.0.0.1",
-                port=local_port,
-                user="postgres",
-                password=superuser_password,
-                dbname="postgres",
-                sslmode="prefer",
-            )
-            messages, credentials_path = self._bootstrap_postgres(request, admin_params)
+            messages, credentials_path = self._bootstrap_postgres(request, superuser_password, tunnel)
         finally:
-            port_forward.terminate()
-            try:
-                port_forward.wait(timeout=10)
-            except subprocess.TimeoutExpired:  # pragma: no cover - defensive
-                port_forward.kill()
+            tunnel.close()
 
         db_name = name.replace("-", "_")
         service_dns = f"{name}-rw.{namespace}.svc.cluster.local"
