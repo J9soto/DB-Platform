@@ -1,75 +1,90 @@
-# Local mode vs. AWS mode: what's equivalent, what isn't, and why
+# Deployment modes: local Docker, K3s, and AWS -- what's equivalent, what isn't, and why
 
-This platform supports two provisioning targets from the same request
-schema. This document is the honest accounting of where they genuinely
-behave the same way and where they don't -- written because the project's
-explicit goal is to never let a "demo path" quietly stand in for
-something it isn't, without saying so.
+This platform provisions from one request schema against three targets.
+This document is the honest accounting of where they genuinely behave the
+same way and where they don't -- written because the project's explicit
+goal is to never let a "demo path" quietly stand in for something it
+isn't, without saying so.
 
-## What's identical between the two modes
+(The filename is `local-vs-aws.md` for link stability; it now covers all
+three modes.)
 
-Both modes apply the exact same:
+| Mode | Mechanism | Prerequisites | Status |
+|---|---|---|---|
+| `local` | `docker compose` + a PostgreSQL container | Docker | Runnable from a clean clone |
+| `k3s` | `kubectl apply` of a CloudNativePG `Cluster` | A Kubernetes cluster + `kubectl` + the CNPG operator (`make k3s-setup`) | The runnable self-hosted path; what this project is demoed on |
+| `aws` | `terraform apply` against `terraform/modules/rds_postgresql` | An AWS account, a VPC/subnets, the Terraform CLI | Reviewed, never wired to a real account |
+
+## What's identical across all three modes
+
+Every mode applies the exact same:
 
 - **Schema validation and policy engine** (`dbre_platform.config`,
-  `dbre_platform.policy`) -- a request that fails policy in local mode
-  fails the same way in AWS mode, because both go through
+  `dbre_platform.policy`) -- a request that fails policy in one mode fails
+  the same way in the others, because all three go through
   `Provisioner.provision()`'s mandatory gate.
-- **Operational readiness scorecard** (`dbre_platform.readiness`).
+- **Operational readiness scorecard** (`dbre_platform.readiness`). Three
+  checks (Multi-AZ, enhanced monitoring, deletion protection) phrase their
+  *report text* in the target's terms, but the weights, the pass/fail
+  logic, and the total (100) are identical.
 - **PostgreSQL cluster and database configuration**
   (`dbre_platform.postgres.standards`): connection limits, statement/idle
   timeouts, logging configuration, and which extensions get preloaded are
   computed by the same `build_cluster_parameters()` function and applied
-  identically -- as `docker compose`'s command-line flags in local mode,
-  as an `aws_db_parameter_group` in AWS mode.
+  as `docker compose` command-line flags (local), a CloudNativePG
+  `spec.postgresql.parameters` block (k3s), or an `aws_db_parameter_group`
+  (aws).
 - **The RBAC model** (`dbre_platform.postgres.rbac`): the same six-role
-  SQL (`roles.sql.j2`) runs against the container in local mode and
-  against the RDS instance in AWS mode. Least privilege doesn't get
-  weaker just because the demo path is easier to run.
-- **Tagging governance** (`dbre_platform.tagging`).
+  SQL (`roles.sql.j2`) runs against the container (local), the CNPG
+  Cluster over a `kubectl port-forward` (k3s), and the RDS instance
+  (aws). Least privilege doesn't get weaker just because a path is easier
+  to run.
+- **Tagging governance** (`dbre_platform.tagging`) -- projected to AWS
+  tags (aws) or `dbre.platform/tag-*` annotations + `app.kubernetes.io/*`
+  labels (k3s).
 - **Audit logging** (`dbre_platform.audit`) -- every provisioning attempt
-  in either mode is recorded identically.
+  in any mode is recorded identically.
 
 ## What's genuinely different, and why
 
-| Concern | Local mode | AWS mode | Why they differ |
-|---|---|---|---|
-| Provisioning mechanism | `docker compose up` against `docker-compose.yml` | `terraform apply` against `terraform/modules/rds_postgresql` | A container and a managed RDS instance are different infrastructure; there's no honest way to make this step "the same." |
-| Backup | `pg_dump`/`pg_restore` run by the platform itself (`dbre_platform.backup.local_backup`) | RDS-managed automated snapshots configured via `backup_retention_days` on the instance, plus optional on-demand snapshots via boto3 (`dbre_platform.backup.aws_backup`) | RDS backups are a platform-managed mechanism, not something you'd or should reimplement with `pg_dump` against a managed instance. |
-| Multi-AZ / failover | Not applicable -- a single container has no standby | A real `aws_db_instance.multi_az` standby, enforced by policy in prod | Docker Compose cannot meaningfully simulate synchronous cross-AZ replication. |
-| Enhanced monitoring | Standard `postgres_exporter`-style metrics only (`docker-compose.yml`'s `observability` profile) | RDS Enhanced Monitoring (1-second OS-level metrics) via a conditionally-created IAM role | Enhanced Monitoring is an AWS-specific managed feature with no local equivalent. |
-| Credentials | Auto-generated, cached in `.dbre/local-superuser.env` (0600, gitignored) | Stored in AWS Secrets Manager (`aws_secretsmanager_secret`), never a Terraform output | A local file is fine for a laptop demo; production credentials belong in a managed secrets store with rotation and access auditing. |
-| Networking | `localhost`, whatever Docker exposes | A real VPC/subnet/security-group model (ADR 0006) | Local mode has no VPC to reason about; AWS mode's whole point is production-realistic network isolation. |
+| Concern | Local mode | K3s mode | AWS mode | Why they differ |
+|---|---|---|---|---|
+| Provisioning mechanism | `docker compose up` | `kubectl apply` of a CNPG `Cluster` | `terraform apply` | A container, an operator-managed StatefulSet, and a managed RDS instance are different infrastructure; there is no honest way to make this step "the same." |
+| Replication / failover | None -- one container | CNPG streaming replication + automatic failover when `instances > 1` (`multi_az` forces 3). On a **single node this is pod-level HA only** -- it survives a pod/process crash, not node/disk/host loss. | A real `aws_db_instance.multi_az` cross-AZ standby | Only RDS Multi-AZ is genuine cross-AZ synchronous replication. CNPG on one node is real replication with a real failover controller, but bounded by having one machine. |
+| Backup | `pg_dump`/`pg_restore` run by the platform (`backup.local_backup`) | Same `pg_dump`/`pg_restore` over a port-forward for rehearsal; **native path is CNPG Barman WAL archiving to off-node object storage** for continuous backup + PITR | RDS-managed automated snapshots via `backup_retention_days`, plus optional boto3 snapshots | Each substrate has a native, platform-managed backup mechanism you would not reimplement with `pg_dump`. The `pg_dump` path stays everywhere as the portable restore-rehearsal tool. |
+| Enhanced monitoring | `postgres_exporter` sidecar (`observability` profile) | CNPG `monitoring.enablePodMonitor` -> Prometheus scrape (needs the Prometheus Operator) | RDS Enhanced Monitoring (1-second OS metrics) via an IAM role | Each is that platform's native metrics integration; none is a drop-in for the others. |
+| Credentials | Auto-generated, cached in `.dbre/local-superuser.env` (0600) | CNPG-generated `<name>-superuser` / `<name>-app` Kubernetes Secrets; login-role passwords cached in `.dbre/credentials/` (0600) | AWS Secrets Manager, never a Terraform output | A local file is fine for a laptop; a K8s Secret is namespace-scoped and RBAC-controlled; Secrets Manager adds rotation and access auditing. K3s Secrets are only as safe as the cluster's at-rest encryption -- see `SECURITY.md`. |
+| Networking | `localhost`, whatever Docker exposes | In-cluster Service DNS (`<name>-rw.<ns>.svc`); external access via `kubectl port-forward`, `NodePort`, or a ServiceLB `LoadBalancer` | A real VPC/subnet/security-group model (ADR 0006) | Local has no network to reason about; K3s isolates by namespace + `NetworkPolicy`; AWS mode's whole point is production-realistic network isolation. |
+| Storage | Docker volume | A `PersistentVolumeClaim`. On K3s' default `local-path` provisioner: single-node, no redundancy, no snapshots, **cannot expand** -- `storage_gb` is a hard ceiling | `allocated_storage` with RDS storage autoscaling available | K3s storage durability depends entirely on the cluster's `StorageClass`; on one node with `local-path` there is none, which is why off-node backups are mandatory. |
 
-## What was and wasn't exercised while building this repository
+## What was and wasn't exercised while building this
 
 Be specific, not just honest in the abstract:
 
 - **Fully run and verified, end to end, against a real PostgreSQL
-  server**: the RBAC bootstrap SQL, all Postgres standards
-  (extensions, `ALTER DATABASE` settings, connection/timeout config), all
-  11 observability queries, the full local backup → restore → verify → cleanup
-  DR drill (`dbre_platform.backup.dr_test`), and every CLI command in
-  this repository (`dbre request validate/provision`, `readiness assess`,
-  `audit tail/verify`, `observability list/run`, `slo report`, `capacity
-  forecast`, `backup create/list/restore`, `dr-test run`).
-- **Structurally verified but not run**: the local Docker Compose path's
-  actual container startup (`docker compose config` was used to confirm
-  the compose file and the platform-generated override merge correctly;
-  the container pull itself requires registry access this build
-  environment didn't have). The SQL that would run *inside* that
-  container was separately verified against a real, natively-installed
+  server**: the RBAC bootstrap SQL, all Postgres standards (extensions,
+  `ALTER DATABASE` settings, connection/timeout config), all 11
+  observability queries, the full local backup → restore → verify →
+  cleanup DR drill (`dbre_platform.backup.dr_test`), and every `dbre` CLI
+  command.
+- **Local Docker mode**: the compose file + platform-generated override
+  merge was verified with `docker compose config`; the SQL that runs
+  inside the container was verified against a real natively-installed
   PostgreSQL 16 server standing in for it.
-- **Written and reviewed, not run against real infrastructure**: every
-  Terraform file (checked for structural correctness -- brace/paren
-  balance, resource references -- since the `terraform` binary itself
-  could not be installed in this build environment) and every boto3-based
-  AWS operation in `dbre_platform.backup.aws_backup` and
-  `dbre_platform.provisioning.aws_rds` (no AWS credentials were
-  available). Both modules say so in their own docstrings, not just here.
+- **K3s mode**: `build_cluster_manifest` output for both example requests
+  is validated against the upstream CloudNativePG CRD schema with
+  `kubeconform` in CI (`.github/workflows/k8s-validate.yml`). The
+  bootstrap SQL applied afterward is the *exact same code* local mode
+  runs. <!-- LIVE-RUN-STATUS -->
+- **AWS mode**: every Terraform file and every boto3-based AWS operation
+  was written and reviewed carefully but **not exercised against a real
+  AWS account or Terraform binary** (no credentials were available). Both
+  `dbre_platform.provisioning.aws_rds` and `dbre_platform.backup.aws_backup`
+  say so in their own module docstrings.
 
-If you're evaluating this repository: the local path is the fastest way
-to confirm the platform logic (policy, RBAC, readiness, SLOs, backups)
-genuinely works, because it's the path that was actually run. The AWS
-path is the production-shaped design -- treat it as "ready for a `terraform
-plan` against a real account, reviewed carefully," and validate it there
-before trusting it in anger.
+If you're evaluating this repository: the **local** and **k3s** paths are
+the fastest way to confirm the platform logic (policy, RBAC, readiness,
+SLOs, backups) genuinely works, because they are the paths that were
+actually run. The **AWS** path is the production-shaped design -- treat it
+as "ready for a `terraform plan` against a real account, reviewed
+carefully," and validate it there before trusting it in anger.

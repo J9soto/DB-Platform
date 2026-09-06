@@ -26,13 +26,13 @@ Developer  -->  self-service YAML request  -->  DBRE CLI
                                                     |
                                 operational readiness scorecard  (fails closed)
                                                     |
-                              +-------------+-------------+
-                              |                           |
-                     LocalDockerProvisioner      AwsRdsProvisioner
-                     (docker compose)             (terraform apply)
-                              |                           |
-                        PostgreSQL  <--------------  AWS RDS PostgreSQL
-                              |
+                +-----------------+-----------------+-----------------+
+                |                 |                                   |
+       LocalDockerProvisioner   K3sProvisioner            AwsRdsProvisioner
+       (docker compose)         (kubectl + CloudNativePG)   (terraform apply)
+                |                 |                                   |
+           PostgreSQL      CNPG Cluster (K3s)  <-----------  AWS RDS PostgreSQL
+                |
        postgres standards + 6-role RBAC + observability + SLOs + capacity + backups
                               |
                     tamper-evident audit log (every step above)
@@ -54,12 +54,17 @@ SLOs, capacity management, tagging, audit logging, and an operational
 readiness gate -- consistently, every time, with no step skipped because
 someone was in a hurry.
 
-It runs in two modes from the same request schema and the same policy
-engine: a **local Docker mode** that needs nothing but this repository
-and Docker, and an **AWS mode** that provisions real RDS PostgreSQL via
-Terraform. See [`docs/local-vs-aws.md`](docs/local-vs-aws.md) for exactly
-what's identical between the two and what's genuinely different, stated
-plainly rather than glossed over.
+It runs in three modes from the same request schema and the same policy
+engine: a **local Docker mode** that needs nothing but this repository and
+Docker; a **K3s mode** that provisions a real
+[CloudNativePG](https://cloudnative-pg.io/) PostgreSQL cluster on
+Kubernetes (the runnable, self-hosted path this project is demoed on --
+see [`docs/k3s-deployment.md`](docs/k3s-deployment.md)); and an **AWS
+mode** that provisions real RDS PostgreSQL via Terraform. See
+[`docs/local-vs-aws.md`](docs/local-vs-aws.md) for exactly what's
+identical between the modes and what's genuinely different, stated plainly
+rather than glossed over. AWS mode has never been wired to a real cloud
+account and is not runnable here; the local and K3s paths are.
 
 ## Key capabilities
 
@@ -162,6 +167,28 @@ Run the full test suite (stdlib `unittest`; also pytest-compatible):
 make test
 ```
 
+## K3s mode (self-hosted, no cloud account)
+
+The runnable path for a server or lab running K3s (or any Kubernetes)
+instead of Docker Desktop. PostgreSQL is provisioned as a real
+[CloudNativePG](https://cloudnative-pg.io/) `Cluster` -- streaming
+replication, automatic failover, a metrics exporter -- from the same
+request schema and the same policy/readiness gate. Full guide:
+[`docs/k3s-deployment.md`](docs/k3s-deployment.md).
+
+```bash
+make install-dev
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml     # or your cluster's kubeconfig
+
+make k3s-setup                                   # installs the CloudNativePG operator (one time)
+dbre request validate  examples/requests/k3s-app.yaml
+dbre request provision examples/requests/k3s-app.yaml --mode k3s
+# or: make k3s-demo
+```
+
+Prerequisites beyond the local demo: a reachable Kubernetes cluster and
+`kubectl`. No Docker required.
+
 ## AWS mode
 
 ```bash
@@ -184,25 +211,26 @@ your own account before trusting it).
 
 ```
 src/dbre_platform/     The platform itself: config, policy, tagging, readiness,
-                        postgres (standards + RBAC), provisioning (local + AWS),
+                        postgres (standards + RBAC), provisioning (local + k3s + AWS),
                         audit, observability, slo, capacity, backup, cli
 policies/               Data-driven policy rules (environments, tagging, naming, readiness)
 terraform/              Reusable RDS PostgreSQL module + dev/prod environments
+k8s/                    K3s mode: CNPG operator install + generated reference Cluster manifests
 ansible/                A complementary automation path applying the same standards
 postgres/               (see src/dbre_platform/postgres/templates -- SQL/Jinja2)
 monitoring/             Vendor-neutral dashboard JSON (generated) + SLO burn-rate alerts
-automation/             Scripts that regenerate generated artifacts (schema, dashboards)
-tests/{unit,policy,integration}/   114 tests; integration tests need a real PostgreSQL server
-examples/               Request YAML fixtures (dev/staging/prod-compliant/prod-noncompliant)
+automation/             Scripts that regenerate generated artifacts (schema, dashboards, k8s refs)
+tests/{unit,policy,integration}/   129 tests; integration tests need a real PostgreSQL server
+examples/               Request YAML fixtures (dev/staging/k3s/prod-compliant/prod-noncompliant)
                         + a capacity-history CSV
 schemas/                Generated JSON Schema for the request format
 docs/                   Architecture, DBRE principles, per-topic deep dives, ADRs
-.github/workflows/      CI (lint/type/test) and Security (secrets/deps/SAST/Terraform) pipelines
+.github/workflows/      CI (lint/type/test), Security (secrets/deps/SAST/Terraform), K8s manifests
 ```
 
 ## Architecture decisions -- the why
 
-Rather than assert good judgment, this repository documents it. Six
+Rather than assert good judgment, this repository documents it. Seven
 architecture decision records explain specific, sometimes non-obvious
 choices and the trade-offs behind them:
 
@@ -223,6 +251,10 @@ choices and the trade-offs behind them:
   Terraform module never creates its own VPC, because networking is
   fleet-level infrastructure a platform team owns independently of any
   one database.
+- [ADR 0007](docs/decisions/0007-k3s-via-cloudnativepg.md) -- K3s mode
+  runs PostgreSQL via the CloudNativePG operator (not a hand-rolled
+  StatefulSet), so replication and failover are real rather than
+  caveated.
 
 For the broader design reasoning -- why policy is data, why gates fail
 closed, why nothing here claims to be more finished than it is -- see
@@ -255,6 +287,11 @@ value the moment it fakes something. So, plainly:
   registry access this build environment didn't have -- the SQL that
   would run inside that container was separately verified against a
   real server standing in for it).
+- **K3s mode**: `build_cluster_manifest` output is validated against the
+  upstream CloudNativePG CRD schema (`kubeconform`) in CI, and the
+  bootstrap SQL is the exact code local mode runs. See
+  [`docs/local-vs-aws.md`](docs/local-vs-aws.md) for the current
+  end-to-end run status against a live cluster.
 - **Written and reviewed carefully, but not exercised against a real
   AWS account or Terraform binary**: the Terraform module and every
   boto3-based AWS operation. Both say so explicitly in their own

@@ -14,7 +14,12 @@ cp .env.example .env  # fill in local values if you plan to run against a real s
 ```
 
 No AWS account or Terraform binary is required to run the test suite or
-the local demo -- see [`docs/local-vs-aws.md`](docs/local-vs-aws.md).
+the local demo -- see [`docs/local-vs-aws.md`](docs/local-vs-aws.md). The
+K3s provisioner's unit tests (`tests/unit/test_k3s_provisioner.py`) also
+need nothing extra; exercising `dbre request provision --mode k3s` for
+real additionally needs `kubectl`, a cluster (K3s / k3d / kind), and the
+CloudNativePG operator (`make k3s-setup`) -- see
+[`docs/k3s-deployment.md`](docs/k3s-deployment.md).
 
 ## Before opening a PR
 

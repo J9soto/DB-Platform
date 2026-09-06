@@ -13,8 +13,8 @@ already-validated tag data), weights them, and sums them into a single
 0-100 score -- and, critically, that score is a **hard gate**, not a
 report card. `Provisioner.provision()` refuses to provision a database
 whose score falls below its environment's threshold, raising
-`ReadinessError` before `_provision()` (the actual `docker compose`/
-`terraform apply` step) ever runs.
+`ReadinessError` before `_provision()` (the actual `docker compose` /
+`kubectl apply` / `terraform apply` step) ever runs.
 
 ## The ten checks
 
@@ -24,6 +24,13 @@ whose score falls below its environment's threshold, raising
 | Backup retention | recoverability | 15 | `backup_retention_days` meets a per-environment minimum (1/7/30 days) |
 | Deletion protection | safety | 10 | `spec.deletion_protection` in prod |
 | Enhanced monitoring | observability | 10 | `spec.enhanced_monitoring` in prod |
+
+Three of these -- Multi-AZ failover, Enhanced monitoring, Deletion
+protection -- read `spec.platform` and phrase their **report text** in
+that substrate's terms (CNPG `instances` + failover, a CNPG `PodMonitor`,
+namespace RBAC + PVC retention) when the target is `k3s`. The weights, the
+pass/fail logic, and the total are unchanged -- only the wording in the
+report differs, so `aws` requests still score exactly as before.
 | Audit logging for sensitive data | compliance | 15 | `pgaudit` present when `data_classification` is confidential/restricted |
 | Change approval | governance | 10 | At least one recorded approval in prod |
 | SLO target defined | reliability | 10 | `slo.availability_target` meets a per-environment floor |

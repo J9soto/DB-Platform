@@ -81,6 +81,28 @@ That flow was written and reviewed carefully but not exercised against a
 real AWS account -- see the disclosure in
 `dbre_platform.backup.aws_backup`'s module docstring.
 
+## K3s mode
+
+Two layers, matching the principle above:
+
+1. **Rehearsal** -- `dbre dr-test run <full_name> --dbname <db>` through a
+   `kubectl port-forward` to the CNPG `<name>-rw` Service. This is the
+   *same* synchronous `pg_dump` → restore-into-throwaway → verify →
+   cleanup drill as local mode, and it proves the same things: the
+   logical backup is restorable and the data is intact. Suitable as a
+   scheduled check.
+2. **Real recovery** -- CloudNativePG PITR. With Barman object-store WAL
+   archiving configured (to storage on a *different* machine than the K3s
+   node), recover into a **new** `Cluster` via `spec.bootstrap.recovery`
+   -- from a named backup or a point in time -- then run application
+   smoke tests and compare measured wall-clock recovery against the
+   request's `recovery_rto_hours` SLO.
+
+On a single-node K3s cluster, layer 2 is what covers "the node is gone",
+and only if the object store is off that node. `instances: 3` alone does
+not -- it is pod-level HA, not host-loss recovery. See
+[`docs/k3s-deployment.md`](k3s-deployment.md).
+
 ## Using it
 
 ```

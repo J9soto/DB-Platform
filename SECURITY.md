@@ -47,6 +47,40 @@ potential impact.
   deletion protection) is refused before provisioning, not merely
   flagged -- see `dbre_platform.provisioning.base.Provisioner.provision`.
 
+## K3s mode
+
+K3s mode (`spec.platform: k3s`) moves trust boundaries into the cluster.
+What the platform does, and what the cluster operator must do:
+
+- **The platform** pipes the generated `Cluster` manifest to `kubectl
+  apply` over stdin (never a world-readable file), reads the
+  CNPG-generated superuser password straight from the Kubernetes Secret,
+  and connects over a short-lived, ephemeral-port `kubectl port-forward`
+  that it tears down when finished. Login-role passwords are written only
+  to `.dbre/credentials/<name>-<env>.env` (`0600`, gitignored), the same
+  as local mode. `spec.namespace` is validated as an RFC 1123 label
+  before it is interpolated into any `kubectl` argument.
+- **The cluster operator** is responsible for the rest of the threat
+  model, none of which a per-request provisioner can enforce:
+  - **Secret encryption at rest.** K3s stores Secrets unencrypted in
+    SQLite by default -- start the server with `--secrets-encryption`, or
+    use sealed-secrets / external-secrets.
+  - **kubeconfig permissions.** `/etc/rancher/k3s/k3s.yaml` is `0644` by
+    default and is cluster-admin -- tighten it and distribute scoped
+    kubeconfigs.
+  - **`kubectl exec` into the primary pod is a superuser path.** Restrict
+    `pods/exec` in the database namespace with RBAC.
+  - **Default-deny `NetworkPolicy`** in the database namespace, allowing
+    only the app workloads that need 5432.
+  - **Restricted PodSecurity** admission on the namespace (CNPG pods run
+    as non-root already).
+  - **Image pinning.** `k8s/operator/install.md` pins the CNPG operator
+    release; the generated `Cluster` pins the PostgreSQL image to a major
+    tag -- pin to a digest for production.
+  - **Single-node durability.** `local-path` storage has no redundancy;
+    off-node backups (CNPG Barman to object storage elsewhere) are
+    mandatory -- see [`docs/k3s-deployment.md`](docs/k3s-deployment.md).
+
 ## What CI checks on every change
 
 See `.github/workflows/security.yml`:
@@ -61,6 +95,11 @@ See `.github/workflows/security.yml`:
 - **Terraform security scanning** (`tfsec`) -- checks the Terraform module
   for common AWS misconfigurations (public access, missing encryption,
   overly broad IAM, etc.) beyond what a human reviewer might catch by eye.
+- **Kubernetes manifest validation** (`kubeconform`, in
+  `.github/workflows/k8s-validate.yml`) -- validates the generated CNPG
+  `Cluster` manifests against the upstream CRD schema and fails if the
+  committed `k8s/reference/*.yaml` have drifted from
+  `build_cluster_manifest`.
 
 ## Known, documented limitations
 

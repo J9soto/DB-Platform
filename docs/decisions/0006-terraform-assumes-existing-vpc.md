@@ -51,3 +51,11 @@ should never be able to affect `payments-api-prod`'s network).
   application subnets, one subnet group per environment vs. per
   database) and supply those IDs -- this module intentionally does not
   make that decision for them.
+- **The same principle applies to K3s mode** (see
+  [ADR 0007](0007-k3s-via-cloudnativepg.md)): `K3sProvisioner` assumes the
+  cluster, the CloudNativePG operator, a `StorageClass`, and (for
+  `enhanced_monitoring`) the Prometheus Operator already exist. It manages
+  the namespace-scoped `Cluster` and what CNPG derives from it, and never
+  creates cluster-wide infrastructure -- installing the operator is a
+  one-time cluster-admin action (`make k3s-setup`), not something a
+  per-database request does.

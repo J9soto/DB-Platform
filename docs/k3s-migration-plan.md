@@ -235,7 +235,7 @@ follow-up.
   1. `make k3s-setup`
   2. `dbre request validate examples/requests/k3s-app.yaml`
   3. `dbre request provision examples/requests/k3s-app.yaml --mode k3s`
-  4. `dbre observability run pg_stat_activity_summary --dbname <db>`
+  4. `dbre observability run connections_by_state --dbname <db>`
   5. `dbre backup create <full_name> --dbname <db>` and
      `dbre dr-test run <full_name> --dbname <db>` through a port-forward
   6. `dbre audit verify`

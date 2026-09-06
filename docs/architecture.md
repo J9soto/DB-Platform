@@ -13,9 +13,12 @@ flowchart TD
     Readiness -->|"score < environment threshold"| Reject3["PROVISIONING REFUSED\nReadinessError"]
     Readiness -->|passes| Mode{"spec.platform"}
     Mode -->|local| Docker["LocalDockerProvisioner\ndocker compose + PostgreSQL container"]
+    Mode -->|k3s| K3s["K3sProvisioner\nkubectl apply -> CloudNativePG Cluster"]
     Mode -->|aws| Terraform["AwsRdsProvisioner\nterraform apply"]
     Terraform --> RDS["AWS RDS PostgreSQL\nSecrets Manager, security group,\nparameter group, CloudWatch alarms"]
+    K3s --> CNPG["CloudNativePG Cluster\nreplication, failover, Secrets,\nPodMonitor (K3s / Kubernetes)"]
     Docker --> PG["PostgreSQL"]
+    CNPG --> PG
     RDS --> PG
     PG --> Standards["Postgres standards + RBAC\ndbre_platform.postgres"]
     Standards --> Obs["Observability\ndbre_platform.observability"]
@@ -26,6 +29,7 @@ flowchart TD
     CLI -.->|every action| Audit
     Policy -.-> Audit
     Docker -.-> Audit
+    K3s -.-> Audit
     Terraform -.-> Audit
 
     style Reject1 fill:#5a1f1f,stroke:#c0392b,color:#fff
@@ -60,10 +64,16 @@ module and function owns each step.
  Provisioner (dbre_platform.provisioning)
      |
      +--> LocalDockerProvisioner ---> docker compose + PostgreSQL container
-     |        (no AWS account needed)      |
+     |        (no cluster needed)          |
      |                                      v
      |                              postgres/standards, postgres/rbac
      |                              (cluster params, extensions, roles, grants)
+     |
+     +--> K3sProvisioner -----------> kubectl apply -> CloudNativePG Cluster
+     |        (self-hosted, runnable)      |   (replication, failover, PodMonitor)
+     |                                      v
+     |                              same postgres/standards + postgres/rbac SQL,
+     |                              applied over a kubectl port-forward
      |
      +--> AwsRdsProvisioner --------> terraform apply ---> RDS PostgreSQL
               (production-oriented)         |
@@ -88,25 +98,35 @@ module and function owns each step.
 Every request passes through the same four gates regardless of platform
 mode: schema, policy, readiness, provisioner. `Provisioner.provision()`
 (`dbre_platform.provisioning.base`) is the one place all three run in
-order, and it is not overridable by a subclass -- `LocalDockerProvisioner`
-and `AwsRdsProvisioner` only implement the `_provision()` step that runs
-*after* the gates pass. A caller cannot accidentally skip policy or
-readiness by calling a provisioner directly; the gate is structural, not
-a convention someone has to remember to invoke.
+order, and it is not overridable by a subclass -- `LocalDockerProvisioner`,
+`K3sProvisioner`, and `AwsRdsProvisioner` only implement the `_provision()`
+step that runs *after* the gates pass. A caller cannot accidentally skip
+policy or readiness by calling a provisioner directly; the gate is
+structural, not a convention someone has to remember to invoke.
 
-## Why two provisioning modes, one platform
+## Why three provisioning modes, one platform
 
 The defining engineering constraint on this repository was: **it must run
 end to end from a clean `git clone`, with no AWS account.** That ruled
 out "the local mode is a stripped-down toy and AWS is the real thing" --
-instead, both modes implement the *same* standards
+instead, every mode implements the *same* standards
 (`dbre_platform.postgres.standards`/`rbac`, the same tagging/audit/
-readiness logic) against the *same* request schema, and differ only in
-the provisioning mechanism underneath: `docker compose` + a local
-PostgreSQL container versus Terraform + RDS. See
-[`docs/local-vs-aws.md`](local-vs-aws.md) for exactly what is and isn't
-equivalent between the two, and where the platform is explicit about a
-capability existing in one mode but not (yet) the other.
+readiness logic) against the *same* request schema, and differs only in
+the provisioning mechanism underneath:
+
+- **local** -- `docker compose` + a PostgreSQL container. Zero
+  prerequisites beyond Docker.
+- **k3s** -- `kubectl apply` of a CloudNativePG `Cluster` on Kubernetes.
+  The runnable self-hosted path (see
+  [`docs/k3s-deployment.md`](k3s-deployment.md) and
+  [ADR 0007](decisions/0007-k3s-via-cloudnativepg.md)); needs a cluster
+  and the CNPG operator, but no cloud account.
+- **aws** -- Terraform + RDS. The production-shaped reference, never wired
+  to a real account.
+
+See [`docs/local-vs-aws.md`](local-vs-aws.md) for exactly what is and
+isn't equivalent between the modes, and where the platform is explicit
+about a capability existing in one mode but not (yet) another.
 
 ## Module map
 
@@ -117,7 +137,7 @@ capability existing in one mode but not (yet) the other.
 | `dbre_platform.tagging` | Resolves the final tag set (developer tags + policy tags + required tags). |
 | `dbre_platform.readiness` | Weighted operational-readiness scorecard, configurable per-environment threshold. |
 | `dbre_platform.postgres` | `executor` (psql subprocess wrapper), `standards` (cluster/db config), `rbac` (roles + grants). |
-| `dbre_platform.provisioning` | `base` (the mandatory gate), `local_docker`, `aws_rds`. |
+| `dbre_platform.provisioning` | `base` (the mandatory gate), `local_docker`, `k3s` (CloudNativePG), `aws_rds`. |
 | `dbre_platform.audit` | Hash-chained, tamper-evident JSON Lines event log. |
 | `dbre_platform.observability` | SQL query library + a vendor-neutral dashboard model (Grafana/CloudWatch/Dynatrace generators). |
 | `dbre_platform.slo` | SLI/error-budget/burn-rate math across availability, latency, backup, recovery. |

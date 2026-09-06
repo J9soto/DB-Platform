@@ -44,6 +44,15 @@ Reasons, in order of how much they actually mattered while building this:
    `postgresql-server`) was. That constraint pushed toward a design that
    turned out to be defensible on its own merits, not just expedient.
 
+The same principle extends to the other infrastructure CLIs the platform
+drives: `docker compose` (local mode), `terraform` (AWS mode), and
+`kubectl` (K3s mode, see [ADR 0007](0007-k3s-via-cloudnativepg.md)). In
+every case the platform runs the exact command an operator would run by
+hand, captures stdout/stderr, and raises a `ProvisioningError` naming the
+missing binary -- rather than embedding an SDK (`docker`, an AWS client,
+the Kubernetes Python client) that would add a build/runtime dependency
+and obscure what actually executed.
+
 ## Consequences
 
 - Every command that talks to PostgreSQL requires the PostgreSQL client

@@ -71,3 +71,27 @@ the phase they were built in.
   (`schemas/database-request.schema.json`).
 - Whole codebase brought to a genuinely clean `ruff check`, `ruff
   format --check`, and `mypy` baseline (not just claimed).
+
+### Phase 6 -- K3s provisioning mode
+- Third provisioning mode (`spec.platform: k3s`): `K3sProvisioner`
+  renders a [CloudNativePG](https://cloudnative-pg.io/) `Cluster` from the
+  same `DatabaseRequest`, applies it with `kubectl`, waits for it to
+  reach a healthy phase, then runs the identical standards + six-role
+  RBAC bootstrap SQL local Docker mode runs (over a short-lived `kubectl
+  port-forward`). No new runtime dependency -- `kubectl` is a subprocess
+  (ADR 0002 / [ADR 0007](docs/decisions/0007-k3s-via-cloudnativepg.md)).
+- `build_cluster_manifest()` is a pure function, unit tested without a
+  cluster; `ClusterParameters.as_cnpg_parameters()` splits
+  `shared_preload_libraries` out of the GUC map.
+- `spec` gains optional K3s fields (`namespace`, `storage_class`,
+  `instances`, nested `resources`), all ignored outside k3s mode.
+- `policies/environments/prod.yaml`: `prod-platform-must-be-aws` ->
+  `prod-platform-supported` (`in [aws, k3s]`); bare local Docker still
+  refused for prod. Three readiness checks phrase their report text in
+  CNPG terms for k3s (weights/logic/total unchanged).
+- `k8s/`: pinned CNPG operator install + generated reference `Cluster`
+  manifests, validated against the upstream CRD schema by a new
+  `k8s-validate` workflow. `make k3s-setup` / `k3s-demo` / `k3s-down`.
+- Docs: `k3s-migration-plan.md`, `k3s-deployment.md`, ADR 0007;
+  `local-vs-aws.md` reworked to cover all three modes.
+- Local Docker mode and AWS mode unchanged.
