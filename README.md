@@ -143,6 +143,8 @@ account and is not runnable here; the local and K3s paths are.
 
 ## Quick start (local mode -- no AWS account required)
 
+Quick-reference version of everything below: [`docs/provisioning-local.md`](docs/provisioning-local.md).
+
 ```bash
 git clone <this-repo> DB-Platform && cd DB-Platform
 make install-dev                 # editable install + dev tooling
@@ -193,7 +195,8 @@ instead of Docker Desktop. PostgreSQL is provisioned as a real
 [CloudNativePG](https://cloudnative-pg.io/) `Cluster` -- streaming
 replication, automatic failover, a metrics exporter -- from the same
 request schema and the same policy/readiness gate. Full guide:
-[`docs/k3s-deployment.md`](docs/k3s-deployment.md).
+[`docs/k3s-deployment.md`](docs/k3s-deployment.md); quick reference:
+[`docs/provisioning-k3s.md`](docs/provisioning-k3s.md).
 
 ```bash
 make install-dev
@@ -209,6 +212,8 @@ Prerequisites beyond the local demo: a reachable Kubernetes cluster and
 `kubectl`. No Docker required.
 
 ## AWS mode
+
+Quick reference: [`docs/provisioning-aws.md`](docs/provisioning-aws.md).
 
 ```bash
 cd terraform/environments/prod
