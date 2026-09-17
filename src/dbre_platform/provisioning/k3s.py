@@ -198,6 +198,11 @@ def build_cluster_manifest(request: DatabaseRequest, *, namespace: str | None = 
     spec = request.spec
     ns = namespace or spec.namespace
     name = request.metadata.name  # RFC 1123 safe: see DatabaseRequest._valid_name
+    # Same derivation _bootstrap_postgres uses for the real application
+    # database name (validated there against _SAFE_DB_NAME_RE; always safe
+    # here too, since it's a strict subset of what DatabaseRequest._valid_name
+    # already accepts for `name`).
+    db_name = name.replace("-", "_")
 
     parameters, preload_libraries = build_cluster_parameters(request).as_cnpg_parameters()
 
@@ -245,6 +250,33 @@ def build_cluster_manifest(request: DatabaseRequest, *, namespace: str | None = 
             # as postgres to run CREATE DATABASE / CREATE ROLE. CNPG disables
             # superuser access by default.
             "enableSuperuserAccess": True,
+            # Without this, CNPG's initdb bootstrap defaults to a generic
+            # "app" database owned by a generic "app" role (its own
+            # <name>-app Secret) -- unrelated to and unaccounted for by this
+            # platform's six-role RBAC model. Naming both after the real
+            # application database instead means: (1) the role/Secret CNPG
+            # can't avoid creating during initdb is at least identifiable as
+            # belonging to this app, not a mystery "app" role, and (2)
+            # _bootstrap_postgres's own `CREATE DATABASE` becomes a no-op
+            # (the database already exists) rather than racing CNPG's
+            # bootstrap for it. Ownership of the database ends up being this
+            # CNPG-created role rather than `postgres`, which is harmless:
+            # every statement _bootstrap_postgres runs afterward (standards,
+            # extensions, the RBAC script) connects as the `postgres`
+            # superuser, which bypasses ownership checks entirely -- see
+            # docs/rbac-model.md. This does NOT fully eliminate the extra
+            # role: CNPG's initdb bootstrap always creates exactly one
+            # owner role/Secret, and there is no supported way to suppress
+            # that (verified directly against a live cluster -- setting
+            # `owner: postgres` does not skip it, and worse, produces a
+            # Secret whose password does not even match the real `postgres`
+            # password). Fully folding this role into the six-role model
+            # (making it literally `{db_name}_owner` and reconciling its
+            # CNPG-generated password) is tracked as follow-up work, not
+            # done here -- it would touch the RBAC rendering shared with
+            # local Docker mode, which has no equivalent pre-existing role
+            # to reconcile with.
+            "bootstrap": {"initdb": {"database": db_name, "owner": db_name}},
             "storage": storage,
             "resources": {
                 "requests": {

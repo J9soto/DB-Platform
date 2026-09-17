@@ -24,6 +24,10 @@ spec:
   imageName: ghcr.io/cloudnative-pg/postgresql:16
   primaryUpdateStrategy: unsupervised
   enableSuperuserAccess: true
+  bootstrap:
+    initdb:
+      database: catalog_api
+      owner: catalog_api
   storage:
     size: 20Gi
   resources:

@@ -92,6 +92,19 @@ class TestBuildClusterManifest(unittest.TestCase):
     def test_superuser_access_enabled_for_bootstrap(self):
         self.assertTrue(build_cluster_manifest(make_request())["spec"]["enableSuperuserAccess"])
 
+    def test_initdb_bootstrap_targets_the_real_application_database(self):
+        # Without this, CNPG's own initdb bootstrap defaults to a generic
+        # "app" database/owner unrelated to the app -- see the k3s.py
+        # comment at this call site for why that's undesirable (verified
+        # against a live cluster). "orders-api" -> "orders_api" is the same
+        # hyphen-to-underscore derivation _bootstrap_postgres uses for the
+        # database it creates/finds -- these must never diverge, or
+        # _bootstrap_postgres's "does the database already exist" check
+        # would miss what CNPG just created.
+        initdb = build_cluster_manifest(make_request())["spec"]["bootstrap"]["initdb"]
+        self.assertEqual(initdb["database"], "orders_api")
+        self.assertEqual(initdb["owner"], "orders_api")
+
     def test_required_tags_are_preserved_as_annotations(self):
         annotations = build_cluster_manifest(make_request())["metadata"]["annotations"]
         self.assertEqual(annotations["dbre.platform/tag-application"], "orders-api")
