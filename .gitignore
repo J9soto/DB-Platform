@@ -33,6 +33,9 @@ backups/
 *.dump
 *.sql.bak
 
+# Change Risk Engine runtime artifacts (generated locally, never committed)
+.cre/
+
 # Kubernetes / K3s
 kubeconfig
 *.kubeconfig

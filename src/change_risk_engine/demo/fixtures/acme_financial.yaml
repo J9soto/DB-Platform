@@ -1,0 +1,89 @@
+# Demo application dependency configuration for "ACME Financial" -- a
+# fictional company used throughout the docs and `make demo-cre` to show
+# the Change Risk Engine working end to end without a real environment.
+#
+# This is the CONFIGURATION-provenance half of dependency discovery (see
+# change_risk_engine/dependencies/__init__.py); the DATABASE_METADATA half
+# comes from change_risk_engine.demo.fixtures.build_demo_database_metadata,
+# a hand-built stand-in for PostgresConnector.get_metadata() -- see
+# docs/demo.md for exactly why a live connection isn't used here.
+
+databases:
+  - name: customer_db
+    production: true
+    critical: true
+  - name: payment_db
+    production: true
+    critical: true
+  - name: analytics_db
+    production: true
+    critical: false
+
+services:
+  - name: customer-portal
+    type: application
+    production: true
+    critical: true
+    owner: customer-experience-team
+    reads: [customer_db.public.customer, customer_db.public.customer_login]
+    writes: [customer_db.public.customer]
+
+  - name: payment-service
+    type: application
+    production: true
+    critical: true
+    owner: payments-team
+    reads: [customer_db.public.customer, payment_db.public.payment]
+    writes: [payment_db.public.payment]
+
+  - name: loan-service
+    type: application
+    production: true
+    critical: false
+    owner: lending-team
+    reads: [customer_db.public.customer]
+    writes: [payment_db.public.payment_method]
+
+  - name: reporting-service
+    type: application
+    production: true
+    critical: false
+    owner: analytics-team
+    reads: [analytics_db.public.customer_dim, analytics_db.public.payment_fact]
+
+  - name: customer-etl
+    type: data_pipeline
+    production: true
+    critical: false
+    owner: data-platform-team
+    reads: [customer_db.public.customer]
+    writes: [analytics_db.public.customer_dim]
+
+  - name: payment-etl
+    type: data_pipeline
+    production: true
+    critical: false
+    owner: data-platform-team
+    reads: [payment_db.public.payment]
+    writes: [analytics_db.public.payment_fact]
+
+replication:
+  - source: customer_db.public.customer
+    target: analytics_db.public.customer_dim
+    mechanism: logical_replication
+    pipeline_name: customer-etl
+  - source: payment_db.public.payment
+    target: analytics_db.public.payment_fact
+    mechanism: etl
+    pipeline_name: payment-etl
+
+apis:
+  - name: "GET /customer/{id}"
+    service: customer-portal
+    tables: [customer_db.public.customer]
+  - name: "POST /payments"
+    service: payment-service
+    tables: [payment_db.public.payment]
+  - name: "GET /loans/{id}"
+    service: loan-service
+    tables: [payment_db.public.payment_method]

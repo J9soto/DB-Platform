@@ -31,6 +31,33 @@ services:
       timeout: 5s
       retries: 10
 
+  # Optional: PostgreSQL for the Change Risk Engine's OWN metadata store
+  # (change_risk_engine.persistence.postgres_store.PostgresAssessmentStore) --
+  # a completely different database from `postgres` above (which the
+  # dbre_platform provisioning flow administers) and different again from
+  # whatever database CRE_DB_* points CRE at to *analyze*. The demo/tests
+  # default to the dependency-free FileAssessmentStore instead; bring this
+  # up only if you want to exercise the real Postgres-backed store:
+  #   docker compose --profile cre up -d cre_store
+  #   psql -h localhost -p 5433 -U postgres -f src/change_risk_engine/persistence/migrations/0001_init.sql
+  cre_store:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "${CRE_STORE_PG_PASSWORD:-change-me}"
+      POSTGRES_DB: change_risk_engine
+    ports:
+      - "5433:5432"
+    volumes:
+      - cre_store_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    profiles:
+      - cre
+
   postgres_exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:latest
     restart: unless-stopped
@@ -45,3 +72,4 @@ services:
 
 volumes:
   dbre_platform_pgdata:
+  cre_store_pgdata:

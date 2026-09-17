@@ -20,12 +20,17 @@ keywords = [
     "k3s",
     "cloudnative-pg",
     "policy-as-code",
+    "change-risk",
+    "change-management",
 ]
 
 # Core dependencies are intentionally minimal and dependency-light.
 # The platform shells out to `psql`, `pg_dump`, `pg_restore`, `docker`, and
 # `terraform` rather than embedding a native DB driver or an AWS SDK in the
-# core path -- see docs/decisions/0002-psql-subprocess-over-driver.md.
+# core path -- see docs/decisions/0002-psql-subprocess-over-driver.md. This
+# also covers change_risk_engine, a second, deliberately separate product
+# domain shipped from the same repository and distribution -- see
+# docs/decisions/0008-change-risk-engine-domain-separation.md.
 dependencies = [
     "click>=8.1",
     "pydantic>=2.4",
@@ -44,16 +49,33 @@ dev = [
     "mypy>=1.8",
     "bandit>=1.7",
     "types-PyYAML",
+    "httpx>=0.27",  # change_risk_engine.api test client (fastapi.testclient.TestClient)
+]
+# change_risk_engine: SQL statement splitting (parser.py does its own
+# semantic extraction; sqlparse is used only for safely splitting a
+# migration file into individual statements around strings/dollar-quotes/
+# comments -- a well-known hard problem not worth re-solving by hand).
+cre = [
+    "sqlparse>=0.5",
+]
+# change_risk_engine's REST API + generated OpenAPI docs (section 17 of the
+# product brief). Kept optional so `pip install -e .` for CLI/analysis-only
+# use stays dependency-light.
+cre-api = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
 ]
 
 [project.scripts]
 dbre = "dbre_platform.cli.main:cli"
+cre = "change_risk_engine.cli.main:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 dbre_platform = ["postgres/templates/*.sql.j2"]
+change_risk_engine = ["web/static/*", "persistence/migrations/*.sql", "demo/fixtures/*.yaml"]
 
 [tool.ruff]
 line-length = 110

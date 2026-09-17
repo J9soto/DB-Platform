@@ -1,0 +1,50 @@
+# Risk factor weights for the Change Risk Engine's database analyzer.
+#
+# Data, not code -- see docs/risk-model.md and section 9 of the product
+# brief ("Do not make the weights arbitrary and invisible"). Every weight
+# below is what a reviewer sees when they ask "why does lock risk count
+# for so much more than query impact"; changing the balance of the score
+# is a pull request against this file, not a code change.
+#
+# `implemented: false` factors are the ones section 9 lists
+# (DEPLOYMENT_FREQUENCY, RECENT_CHANGE_ACTIVITY, OBSERVABILITY,
+# TEST_COVERAGE) that this MVP has no real data source for yet -- their
+# weight is 0 and change_risk_engine.risk.engine reports them as
+# Uncertainty entries instead of silently treating "no data" as "no risk".
+# Wiring a real source (CI/CD deploy history, a monitoring API, a coverage
+# report) is additive: give it a weight here and implement its factor
+# function in change_risk_engine/risk/factors.py.
+version: "1.0"
+description: >
+  Default weights for the 13 risk factors the database change analyzer can
+  compute today. Must sum to 1.0 across implemented factors.
+factors:
+  lock_risk: { weight: 0.16, implemented: true }
+  backward_compatibility: { weight: 0.12, implemented: true }
+  criticality: { weight: 0.11, implemented: true }
+  dependency_count: { weight: 0.10, implemented: true }
+  production_usage: { weight: 0.09, implemented: true }
+  rollback_difficulty: { weight: 0.08, implemented: true }
+  table_size: { weight: 0.08, implemented: true }
+  data_volume: { weight: 0.07, implemented: true }
+  index_impact: { weight: 0.06, implemented: true }
+  replication_impact: { weight: 0.05, implemented: true }
+  change_complexity: { weight: 0.04, implemented: true }
+  query_impact: { weight: 0.02, implemented: true }
+  historical_incidents: { weight: 0.02, implemented: true }
+  deployment_frequency: { weight: 0.0, implemented: false }
+  recent_change_activity: { weight: 0.0, implemented: false }
+  observability: { weight: 0.0, implemented: false }
+  test_coverage: { weight: 0.0, implemented: false }
+
+# Score-to-level thresholds (overall_score is 0-100). Also data, not code --
+# change_risk_engine.risk.engine reads this, never hard-codes "score >= 75".
+risk_levels:
+  low_max: 24
+  medium_max: 49
+  high_max: 74
+  # >= 75 is CRITICAL
+
+# Below this confidence, the engine adds a standing Uncertainty entry
+# regardless of what else it found -- see change_risk_engine.risk.engine.
+minimum_confidence_for_no_uncertainty_note: 0.85

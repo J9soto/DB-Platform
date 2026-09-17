@@ -1,0 +1,103 @@
+# Versioned risk policy rules for database changes.
+#
+# Data, not code -- see docs/policy-engine.md and section 10 of the
+# product brief. Each rule's ``conditions`` are evaluated against a
+# flattened view of the in-progress assessment (see
+# change_risk_engine.policy.engine._build_document-equivalent inline in
+# RiskPolicyEngine.evaluate): environment, is_production, overall_score,
+# risk_level, confidence, factors.<name>.score, operation_types.
+#
+# A rule's ``set_risk_level`` action only ever escalates the final risk
+# level -- it can never make a real risk look smaller than what the risk
+# engine actually measured (enforced in change_risk_engine.policy.engine).
+version: "1.0"
+rules:
+  - id: require-approval-high-risk-production
+    description: >
+      HIGH or CRITICAL risk changes targeting production require explicit
+      human approval before deployment.
+    severity: error
+    conditions:
+      - field: is_production
+        operator: equals
+        value: true
+      - field: risk_level
+        operator: in
+        value: [high, critical]
+    actions:
+      require_approval: true
+
+  - id: escalate-large-table-breaking-change-production
+    description: >
+      A backward-incompatible change to a table over 500GB in production is
+      escalated to CRITICAL regardless of the raw weighted score, and
+      requires approval -- this is the direct implementation of section 10's
+      example policy (production + table_size > 500GB + a breaking
+      operation).
+    severity: error
+    conditions:
+      - field: is_production
+        operator: equals
+        value: true
+      - field: factors.table_size.score
+        operator: gte
+        value: 75
+      - field: factors.backward_compatibility.score
+        operator: gte
+        value: 55
+    actions:
+      set_risk_level: critical
+      require_approval: true
+
+  - id: recommend-online-index-strategy
+    description: >
+      CREATE INDEX without CONCURRENTLY on a large table should use an
+      online (CONCURRENTLY) build strategy -- section 10's second example
+      policy.
+    severity: warning
+    conditions:
+      - field: factors.index_impact.score
+        operator: gte
+        value: 85
+    actions:
+      recommend:
+        - title: "Use an online index build strategy"
+          detail: >
+            Policy requires CREATE INDEX CONCURRENTLY (or an equivalent
+            online build strategy) for index builds on tables this large in
+            production.
+          priority: required
+          category: deployment
+
+  - id: require-approval-critical-dependency-count
+    description: >
+      Changes whose dependency-count factor is CRITICAL (very wide blast
+      radius) require approval even outside production, since staging/dev
+      changes can still share infrastructure with production pipelines.
+    severity: warning
+    conditions:
+      - field: factors.dependency_count.score
+        operator: gte
+        value: 85
+    actions:
+      require_approval: true
+
+  - id: low-confidence-manual-review
+    description: >
+      Assessments below 60% confidence are flagged for manual review rather
+      than trusted at face value -- an uncertain LOW/MEDIUM score is not
+      the same claim as a confident one.
+    severity: warning
+    conditions:
+      - field: confidence
+        operator: lt
+        value: 0.6
+    actions:
+      recommend:
+        - title: "Manually review this assessment"
+          detail: >
+            Confidence in this assessment is low -- treat the score as a
+            starting point, not a conclusion, and have a human review the
+            uncertainty section before deciding.
+          priority: recommended
+          category: review

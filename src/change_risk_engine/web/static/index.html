@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Change Risk Engine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Change Risk Engine</h1>
+    <span class="tagline">Understand the blast radius of a change before it reaches production.</span>
+  </header>
+
+  <main>
+    <div>
+      <section class="panel">
+        <h2>Submit change</h2>
+        <form id="submit-form">
+          <label for="sql">SQL migration</label>
+          <textarea id="sql" placeholder="ALTER TABLE customer ADD COLUMN credit_score INTEGER;">ALTER TABLE customer DROP COLUMN credit_score;</textarea>
+
+          <div class="row">
+            <div>
+              <label for="environment">Environment</label>
+              <select id="environment">
+                <option value="dev">dev</option>
+                <option value="staging">staging</option>
+                <option value="prod" selected>prod</option>
+              </select>
+            </div>
+            <div>
+              <label for="target-database">Target database</label>
+              <select id="target-database">
+                <option value="customer_db">customer_db</option>
+                <option value="payment_db">payment_db</option>
+                <option value="analytics_db">analytics_db</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkbox-row">
+            <input type="checkbox" id="demo" checked />
+            <label for="demo">Use ACME Financial demo fixtures (no live database required)</label>
+          </div>
+
+          <button type="submit" id="submit-btn">Analyze change</button>
+        </form>
+      </section>
+
+      <section class="panel" style="margin-top: 16px;">
+        <h2>History</h2>
+        <div id="history-list" class="history-list">
+          <div class="empty-state">No assessments yet.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" id="results">
+      <div class="empty-state">Submit a change to see its risk assessment.</div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
