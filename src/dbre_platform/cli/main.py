@@ -3,6 +3,13 @@
     dbre request validate examples/requests/dev-app.yaml
     dbre request provision examples/requests/dev-app.yaml --mode local
 
+    # Customize a request without editing or copying the template file:
+    dbre request provision examples/requests/k3s-app.yaml --mode k3s \\
+        --name orders-api --namespace orders \\
+        --cpu-request 250m --memory-request 512Mi \\
+        --extension pgcrypto --extension pg_trgm \\
+        --set spec.storage_gb=50
+
 Built on click rather than a heavier framework deliberately -- see
 docs/decisions/0003-click-over-typer.md.
 """
@@ -16,10 +23,72 @@ import click
 
 from dbre_platform.audit.logger import AuditLogger
 from dbre_platform.config.loader import load_database_request
+from dbre_platform.config.overrides import build_field_overrides
 from dbre_platform.exceptions import DBREPlatformError
 from dbre_platform.logging_config import configure_logging
 from dbre_platform.policy.engine import PolicyEngine
 from dbre_platform.readiness.scorecard import assess_readiness
+
+
+def request_override_options(f):
+    """Shared ``--name``/``--namespace``/``--cpu-*``/``--memory-*``/
+    ``--extension``/``--set`` options, applied identically to
+    ``request validate``, ``readiness assess``, and ``request provision``
+    so a request can be validated with the exact overrides it will be
+    provisioned with. See ``dbre_platform.config.overrides``.
+    """
+    options = [
+        click.option("--name", default=None, help="Override metadata.name."),
+        click.option("--namespace", default=None, help="Override spec.namespace (K3s mode)."),
+        click.option("--cpu-request", default=None, help="Override spec.resources.cpu_request (K3s mode)."),
+        click.option(
+            "--memory-request", default=None, help="Override spec.resources.memory_request (K3s mode)."
+        ),
+        click.option("--cpu-limit", default=None, help="Override spec.resources.cpu_limit (K3s mode)."),
+        click.option("--memory-limit", default=None, help="Override spec.resources.memory_limit (K3s mode)."),
+        click.option(
+            "--extension",
+            "extensions",
+            multiple=True,
+            help="Add a PostgreSQL extension (repeatable) -- merged with the template's spec.extensions.",
+        ),
+        click.option(
+            "--set",
+            "set_values",
+            multiple=True,
+            metavar="FIELD=VALUE",
+            help="Override any field by dotted path, e.g. --set spec.storage_gb=50 (repeatable).",
+        ),
+    ]
+    for option in reversed(options):
+        f = option(f)
+    return f
+
+
+def _load_with_overrides(
+    request_file: str,
+    *,
+    name: str | None,
+    namespace: str | None,
+    cpu_request: str | None,
+    memory_request: str | None,
+    cpu_limit: str | None,
+    memory_limit: str | None,
+    extensions: tuple[str, ...],
+    set_values: tuple[str, ...],
+):
+    named = {
+        "name": name,
+        "namespace": namespace,
+        "cpu_request": cpu_request,
+        "memory_request": memory_request,
+        "cpu_limit": cpu_limit,
+        "memory_limit": memory_limit,
+    }
+    field_overrides = build_field_overrides(named, set_values)
+    return load_database_request(
+        request_file, field_overrides=field_overrides, additional_extensions=extensions
+    )
 
 
 @click.group()
@@ -42,11 +111,32 @@ def request() -> None:
 
 @request.command("validate")
 @click.argument("request_file", type=click.Path(exists=True))
-def request_validate(request_file: str) -> None:
+@request_override_options
+def request_validate(
+    request_file: str,
+    name: str | None,
+    namespace: str | None,
+    cpu_request: str | None,
+    memory_request: str | None,
+    cpu_limit: str | None,
+    memory_limit: str | None,
+    extensions: tuple[str, ...],
+    set_values: tuple[str, ...],
+) -> None:
     """Validate a request file against policy (no provisioning)."""
     audit = AuditLogger()
     try:
-        db_request = load_database_request(request_file)
+        db_request = _load_with_overrides(
+            request_file,
+            name=name,
+            namespace=namespace,
+            cpu_request=cpu_request,
+            memory_request=memory_request,
+            cpu_limit=cpu_limit,
+            memory_limit=memory_limit,
+            extensions=extensions,
+            set_values=set_values,
+        )
     except DBREPlatformError as exc:
         click.echo(str(exc), err=True)
         sys.exit(1)
@@ -74,7 +164,19 @@ def request_validate(request_file: str) -> None:
     show_default=True,
     help="'request' uses spec.platform from the file; local/k3s/aws force a mode.",
 )
-def request_provision(request_file: str, mode: str) -> None:
+@request_override_options
+def request_provision(
+    request_file: str,
+    mode: str,
+    name: str | None,
+    namespace: str | None,
+    cpu_request: str | None,
+    memory_request: str | None,
+    cpu_limit: str | None,
+    memory_limit: str | None,
+    extensions: tuple[str, ...],
+    set_values: tuple[str, ...],
+) -> None:
     """Validate, assess readiness, and provision a database environment.
 
     Refuses to provision (exit code 1) if policy validation or the
@@ -82,7 +184,17 @@ def request_provision(request_file: str, mode: str) -> None:
     described in the README's request lifecycle diagram.
     """
     try:
-        db_request = load_database_request(request_file)
+        db_request = _load_with_overrides(
+            request_file,
+            name=name,
+            namespace=namespace,
+            cpu_request=cpu_request,
+            memory_request=memory_request,
+            cpu_limit=cpu_limit,
+            memory_limit=memory_limit,
+            extensions=extensions,
+            set_values=set_values,
+        )
     except DBREPlatformError as exc:
         click.echo(str(exc), err=True)
         sys.exit(1)
@@ -130,9 +242,30 @@ def readiness() -> None:
 
 @readiness.command("assess")
 @click.argument("request_file", type=click.Path(exists=True))
-def readiness_assess(request_file: str) -> None:
+@request_override_options
+def readiness_assess(
+    request_file: str,
+    name: str | None,
+    namespace: str | None,
+    cpu_request: str | None,
+    memory_request: str | None,
+    cpu_limit: str | None,
+    memory_limit: str | None,
+    extensions: tuple[str, ...],
+    set_values: tuple[str, ...],
+) -> None:
     """Score a request's operational readiness and show the pass/fail gate."""
-    db_request = load_database_request(request_file)
+    db_request = _load_with_overrides(
+        request_file,
+        name=name,
+        namespace=namespace,
+        cpu_request=cpu_request,
+        memory_request=memory_request,
+        cpu_limit=cpu_limit,
+        memory_limit=memory_limit,
+        extensions=extensions,
+        set_values=set_values,
+    )
     assessment = assess_readiness(db_request)
     click.echo(assessment.format_report())
     sys.exit(0 if assessment.passed else 1)
