@@ -15,6 +15,12 @@ tfvars-generation logic below has unit test coverage
 Terraform expects from a given DatabaseRequest. Treat the Terraform side of
 this path as "ready for a real `terraform plan` against your account," not
 as "has been applied in production."
+
+Separately, and not yet solved here: `_provision()` stops once
+`terraform apply`/`output` return -- unlike `LocalDockerProvisioner`/
+`K3sProvisioner`, nothing in this class connects to the resulting RDS
+endpoint to apply `dbre_platform.postgres.standards`/`rbac`. See the
+"RBAC / standards bootstrap" row in docs/local-vs-aws.md.
 """
 
 from __future__ import annotations

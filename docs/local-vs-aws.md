@@ -34,11 +34,16 @@ Every mode applies the exact same:
   as `docker compose` command-line flags (local), a CloudNativePG
   `spec.postgresql.parameters` block (k3s), or an `aws_db_parameter_group`
   (aws).
-- **The RBAC model** (`dbre_platform.postgres.rbac`): the same six-role
-  SQL (`roles.sql.j2`) runs against the container (local), the CNPG
-  Cluster over a `kubectl port-forward` (k3s), and the RDS instance
-  (aws). Least privilege doesn't get weaker just because a path is easier
-  to run.
+- **The RBAC model** (`dbre_platform.postgres.rbac`) **in local and K3s
+  mode**: the same six-role SQL (`roles.sql.j2`) runs against the
+  container (local) and the CNPG Cluster over a `kubectl port-forward`
+  (k3s) -- least privilege doesn't get weaker just because a path is
+  easier to run. **AWS mode does not run this step at all** --
+  `AwsRdsProvisioner._provision()` stops once `terraform apply`/`output`
+  return; there is no code path that connects to the new RDS instance
+  and applies the standards/RBAC SQL. This is a real gap, not an
+  unverified-but-present one -- see the "RBAC / standards bootstrap" row
+  below.
 - **Tagging governance** (`dbre_platform.tagging`) -- projected to AWS
   tags (aws) or `dbre.platform/tag-*` annotations + `app.kubernetes.io/*`
   labels (k3s).
@@ -56,6 +61,7 @@ Every mode applies the exact same:
 | Credentials | Auto-generated, cached in `.dbre/local-superuser.env` (0600) | CNPG-generated `<name>-superuser` / `<name>-app` Kubernetes Secrets; login-role passwords cached in `.dbre/credentials/` (0600) | AWS Secrets Manager, never a Terraform output | A local file is fine for a laptop; a K8s Secret is namespace-scoped and RBAC-controlled; Secrets Manager adds rotation and access auditing. K3s Secrets are only as safe as the cluster's at-rest encryption -- see `SECURITY.md`. |
 | Networking | `localhost`, whatever Docker exposes | In-cluster Service DNS (`<name>-rw.<ns>.svc`); external access via `kubectl port-forward`, `NodePort`, or a ServiceLB `LoadBalancer` | A real VPC/subnet/security-group model (ADR 0006) | Local has no network to reason about; K3s isolates by namespace + `NetworkPolicy`; AWS mode's whole point is production-realistic network isolation. |
 | Storage | Docker volume | A `PersistentVolumeClaim`. On K3s' default `local-path` provisioner: single-node, no redundancy, no snapshots, **cannot expand** -- `storage_gb` is a hard ceiling | `allocated_storage` with RDS storage autoscaling available | K3s storage durability depends entirely on the cluster's `StorageClass`; on one node with `local-path` there is none, which is why off-node backups are mandatory. |
+| RBAC / standards bootstrap | Applied (`roles.sql.j2` over a direct `psql` connection) | Applied (same SQL, over a `kubectl port-forward`) | **Not applied** -- `terraform apply` provisions the instance and an `aws_db_parameter_group` (cluster-level settings only), but nothing connects to the resulting RDS endpoint to create the six roles or grant privileges | Local/K3s both reach Postgres directly right after the container/Cluster comes up. AWS mode has no equivalent "just connect" step built yet -- it would need the master credential from Secrets Manager, network reachability to the (by design, non-public) RDS endpoint, and a bootstrap call this provisioner doesn't make today. Until that exists, an operator applying AWS mode must run the standards/RBAC SQL by hand. |
 
 ## What was and wasn't exercised while building this
 
@@ -95,7 +101,12 @@ Be specific, not just honest in the abstract:
   was written and reviewed carefully but **not exercised against a real
   AWS account or Terraform binary** (no credentials were available). Both
   `dbre_platform.provisioning.aws_rds` and `dbre_platform.backup.aws_backup`
-  say so in their own module docstrings.
+  say so in their own module docstrings. That's distinct from, and in
+  addition to, a real gap in the code itself: the standards/RBAC
+  bootstrap step local and K3s mode both run is simply **not
+  implemented** for AWS mode -- not "written but unverified," genuinely
+  absent from `AwsRdsProvisioner._provision()`. See the "RBAC / standards
+  bootstrap" row above.
 
 If you're evaluating this repository: the **local** and **k3s** paths are
 the fastest way to confirm the platform logic (policy, RBAC, readiness,
