@@ -95,3 +95,130 @@ the phase they were built in.
 - Docs: `k3s-migration-plan.md`, `k3s-deployment.md`, ADR 0007;
   `local-vs-aws.md` reworked to cover all three modes.
 - Local Docker mode and AWS mode unchanged.
+
+### Phase 7 -- Change Risk Engine (`change_risk_engine`, new `cre` CLI)
+A second major product capability: "understand the blast radius of a
+proposed change before it reaches production." A deliberately separate
+domain from `dbre_platform` -- see
+[ADR 0008](docs/decisions/0008-change-risk-engine-domain-separation.md) --
+built around a generic `Change`/`ChangeRiskAssessment` model so today's
+PostgreSQL-only MVP can grow into a multi-language, multi-system
+application change risk engine without a rewrite (see
+`docs/application-expansion.md`).
+
+- **Domain model** (`change_risk_engine.domain`): `Change`,
+  `DatabaseChangeOperation`, `ChangeRiskAssessment`, `RiskFactor` +
+  `RiskEvidence`, `Dependency` + `DependencyGraph`, `BlastRadius`,
+  `Recommendation`, `RiskPolicyRule` + `PolicyDecision`, `Deployment` /
+  `ChangeOutcome` / `RiskOverride` (the learning-loop foundation). See
+  `docs/domain-model.md`.
+- **A hand-written, auditable PostgreSQL DDL parser**
+  (`change_risk_engine.analyzers.database.parser`) covering
+  CREATE/ALTER/DROP TABLE, ADD/DROP/ALTER/RENAME COLUMN, CREATE/DROP
+  INDEX (incl. CONCURRENTLY), constraints/foreign keys, VIEW, FUNCTION --
+  every operation traces to one named regular expression, and an
+  unrecognized statement degrades to `UNKNOWN` (reduced confidence) rather
+  than failing the change.
+- **Read-only PostgreSQL metadata connector**
+  (`change_risk_engine.connectors.postgres`) -- schemas, tables, columns,
+  indexes, constraints, foreign keys, views, row/size estimates,
+  `pg_stat_user_tables` query activity -- via `psql` (ADR 0002's
+  convention, its own smaller implementation, not shared code) with every
+  query wrapped in `BEGIN READ ONLY` and every identifier passed through
+  psql `--set`/`:'var'` substitution, never string-interpolated into SQL
+  text. Oracle/MySQL/SQL Server/Aurora PostgreSQL are interface-only stubs
+  (`change_risk_engine.connectors.stubs`).
+- **Dependency graph + blast radius**
+  (`change_risk_engine.dependencies`, `change_risk_engine.blast_radius`):
+  combines real catalog facts (foreign keys, view dependencies) with a
+  YAML application-dependency configuration (which services/pipelines/
+  APIs read or write which tables), every edge carrying its provenance
+  (`DependencySource`) and confidence -- an inferred/configured edge is
+  never presented as a confirmed fact.
+- **Explainable risk engine** (`change_risk_engine.risk`): 13 factors
+  (lock risk, backward compatibility, criticality, dependency count,
+  production usage, table size, data volume, index impact, replication
+  impact, rollback difficulty, change complexity, query impact,
+  historical incidents), weights and risk-level thresholds loaded from
+  `policies/risk/factor-weights.yaml` (never hard-coded), 4 factors
+  (deployment frequency, recent change activity, observability, test
+  coverage) explicitly reported as not-yet-assessed rather than silently
+  scored as safe.
+- **Versioned, data-driven risk policy engine**
+  (`change_risk_engine.policy`, `policies/risk/rules/*.yaml`) --
+  independent implementation of the same "policy is data" convention as
+  `dbre_platform.policy`, never sharing code across the domain boundary.
+  Policy can only ever escalate a risk level, never quietly lower one.
+- **Deterministic, evidence-grounded explanations**
+  (`change_risk_engine.ai`): a `RuleBasedExplainer` default (offline, fully
+  reproducible) plus an `LLMExplainer` extension point that narrates only
+  facts already on the assessment -- the score is never computed by a
+  model.
+- **Persistence**: `FileAssessmentStore` (JSON files, the tested MVP
+  default, same trade-off as `dbre_platform.audit.AuditLogger`) and
+  `PostgresAssessmentStore` against a full normalized schema
+  (`persistence/migrations/0001_init.sql`) for a production deployment --
+  written and reviewed, not exercised against a live server in this build
+  environment (see `docs/database-analysis.md`).
+- **REST API** (FastAPI, `change_risk_engine.api`), versioned under
+  `/api/v1`, OpenAPI docs at `/docs`, a pluggable auth abstraction
+  (`change_risk_engine.auth`, API-key or explicit anonymous-admin dev
+  mode).
+- **Web UI**: a dependency-free static dashboard (`change_risk_engine/web`)
+  served at `/ui` -- submit a change, see the score, factor bars, blast
+  radius, recommendations, evidence, and uncertainty; browse history.
+- **`cre` CLI** (`change_risk_engine.cli`): `analyze`, `report`,
+  `history`, `policy list`, `dependency graph`, `demo`, `audit
+  tail`/`verify` -- `analyze` exits non-zero above a configurable risk
+  threshold or when approval is required, for CI/CD use.
+- **ACME Financial demo fixtures** (`change_risk_engine.demo`) -- three
+  databases, six services/pipelines, cross-database replication -- so
+  `cre demo` / `make demo-cre` runs with no live database required.
+- **96 new tests** (unit + integration), including the 8 required
+  scenarios from the product brief (nullable ADD COLUMN through a
+  520GB-table CREATE INDEX policy trigger), a parser suite, dependency
+  graph/blast-radius traversal tests, policy-engine tests, persistence
+  round-trip tests, CLI tests, a full API workflow test, and security
+  tests (identifier-injection safety, no connector method ever accepts
+  raw SQL, auth behavior).
+- Its own tamper-evident audit log
+  (`change_risk_engine.audit`, `audit-log/cre-audit.jsonl`) -- same
+  hash-chain construction as `dbre_platform.audit`, a separate file.
+
+### Phase 8 -- Parameterized request overrides (`dbre_platform.config.overrides`)
+Self-service requests can now be customized without editing or copying
+the template YAML: `dbre request validate`/`request provision`/
+`readiness assess` all gained `--name`, `--namespace`, `--cpu-request`/
+`--memory-request`/`--cpu-limit`/`--memory-limit`, `--extension`
+(repeatable, additive -- merges with the template's own
+`spec.extensions` rather than replacing it), and a generic
+`--set field.path=value` covering any other schema field. Overrides are
+merged into the raw document *before* `DatabaseRequest.model_validate`
+runs, so a bad override (e.g. an invalid `--name`) fails the exact same
+validation a hand-written value would -- there is no separate,
+unvalidated override path. 25 new tests
+(`tests/unit/test_config_overrides.py`, `tests/unit/test_cli_overrides.py`).
+
+### Phase 9 -- K3s mode: stop CNPG's default "app" database/role from being unmanaged
+`K3sProvisioner.build_cluster_manifest()` now sets `spec.bootstrap.initdb.database`/
+`.owner` to the request's own application database name. Without this,
+CloudNativePG's own `initdb` bootstrap silently created a second,
+unrelated database/login role named generically `app` (with its own
+`<cluster>-app` Secret) on every K3s-mode provision -- present but
+entirely unaccounted for by this platform's six-role RBAC model, tagging,
+or `.dbre/credentials/`. Verified directly against a live cluster before
+and after (not just reasoned about): the change was validated against
+three real, disposable CNPG clusters, which also ruled out the more
+"obvious" fix (`owner: postgres`) as actively wrong -- it does not
+suppress the extra Secret, and produces one whose password does not even
+match the real `postgres` password. The fix does not eliminate CNPG's
+extra owner role entirely (there is no supported way to); it makes that
+role identifiable and its credential genuinely correct instead of a
+generic, silently-wrong one. Database ownership of the real application
+database changes from `postgres` to this new role as a result, which is
+harmless -- every later bootstrap statement (standards, extensions, RBAC)
+connects as the `postgres` superuser regardless, bypassing ownership
+checks; `docs/rbac-model.md`'s grants are all schema-level, never
+ownership-dependent. `k8s/reference/{dev,prod}-cluster.yaml` regenerated
+to match (CI fails on stale generated output otherwise). One new test in
+`tests/unit/test_k3s_provisioner.py`.

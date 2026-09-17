@@ -17,6 +17,12 @@ database with real least-privilege RBAC, a real policy engine refusing
 non-compliant requests, and a real audit trail -- no AWS account, no
 cloud bill, no waiting on infrastructure.
 
+This repository also ships a second, deliberately separate product built
+on the same engineering conventions: the **[Change Risk Engine](#change-risk-engine)**
+-- "understand the blast radius of a proposed change before it reaches
+production." See that section below, or jump straight to
+[`docs/domain-model.md`](docs/domain-model.md).
+
 ```
 Developer  -->  self-service YAML request  -->  DBRE CLI
                                                     |
@@ -71,6 +77,15 @@ account and is not runnable here; the local and K3s paths are.
 - **A declarative, versioned request schema** (Pydantic, `apiVersion`/
   `kind`/`metadata`/`spec`) -- see `examples/requests/*.yaml` and
   `schemas/database-request.schema.json` (generated, never hand-edited).
+- **Customize a request without editing or copying its YAML file.**
+  `dbre request validate/provision` and `dbre readiness assess` all take
+  `--name`, `--namespace`, `--cpu-request`/`--memory-request`/
+  `--cpu-limit`/`--memory-limit`, `--extension` (repeatable, additive),
+  and a generic `--set field.path=value` for anything else in the
+  schema -- every override goes through the identical Pydantic validation
+  a hand-written value would, so `--name` still gets rejected if it
+  doesn't fit the naming pattern. See
+  [`dbre_platform.config.overrides`](src/dbre_platform/config/overrides.py).
 - **A data-driven policy validation engine.** Every rule -- production
   guardrails (Multi-AZ, 30-day backup retention, deletion protection,
   enhanced monitoring, mandatory approval, a 99.9% SLO floor), tagging
@@ -121,7 +136,7 @@ account and is not runnable here; the local and K3s paths are.
   dependency scanning (`pip-audit`), static analysis (`bandit`), Terraform
   security scanning (`tfsec`), and pre-commit hooks mirroring all of it
   locally.
-- **114 tests** across unit, policy, and integration suites -- integration
+- **159 tests** across unit, policy, and integration suites -- integration
   tests run real `pg_dump`/`pg_restore`/DR drills against a live
   PostgreSQL server when one is reachable, and skip cleanly (never
   silently pass) otherwise.
@@ -145,6 +160,10 @@ dbre readiness assess examples/requests/prod-app-noncompliant.yaml
 
 # Provision the dev request for real: schema -> policy -> readiness -> RBAC -> standards
 dbre request provision examples/requests/dev-app.yaml --mode local
+
+# Customize a request without editing or copying the file:
+dbre request provision examples/requests/dev-app.yaml --mode local \
+  --name orders-api --set spec.storage_gb=50 --extension pgcrypto
 
 # Run the platform's own diagnostics
 dbre observability list
@@ -207,30 +226,96 @@ available in that build environment, so this path is reviewed carefully
 and unit-tested, not battle-tested -- run a real `terraform plan` against
 your own account before trusting it).
 
+## Change Risk Engine
+
+**Understand the blast radius of a proposed change before it reaches
+production.** A second major product capability in this repository,
+built on the same engineering conventions as the platform above but a
+deliberately separate domain --
+[ADR 0008](docs/decisions/0008-change-risk-engine-domain-separation.md)
+explains why. Today it analyzes PostgreSQL schema migrations; the
+architecture is built to grow into a multi-language application change
+risk engine without a rewrite -- see
+[`docs/application-expansion.md`](docs/application-expansion.md).
+
+```bash
+make cre-install     # pip install -e ".[cre,cre-api,dev]"
+make demo-cre         # assess a low-risk and a high-risk change -- no database required
+make cre-api            # REST API + web dashboard at http://127.0.0.1:8000/ui/
+```
+
+Or, against your own database (read-only, no submitted SQL is ever
+executed -- see [`docs/security.md`](docs/security.md)):
+
+```bash
+export CRE_DB_HOST=localhost CRE_DB_PORT=5432 CRE_DB_USER=readonly_user CRE_DB_PASSWORD=...
+cre analyze migration.sql --environment prod --target-database mydb
+```
+
+`cre analyze` parses the SQL into structured operations
+(`ADD COLUMN`/`DROP COLUMN`/`CREATE INDEX`/...), collects live metadata
+(row/size estimates, indexes, constraints, foreign keys), builds a
+dependency graph combining real foreign-key/view facts with a declared
+application-dependency map, traverses it for blast radius, scores 13
+weighted risk factors, evaluates versioned risk policies (which can
+require approval or escalate the risk level, but never silently lower
+one), and produces a report explaining exactly *why* -- every score
+traces to named evidence, never a bare number. See
+[`docs/risk-model.md`](docs/risk-model.md) for the full scoring
+methodology and [`docs/demo.md`](docs/demo.md) for a worked walkthrough
+with the fictional "ACME Financial" fixtures the demo/tests use.
+
+- **Full docs**: [`docs/domain-model.md`](docs/domain-model.md) ·
+  [`docs/risk-model.md`](docs/risk-model.md) ·
+  [`docs/database-analysis.md`](docs/database-analysis.md) ·
+  [`docs/dependency-model.md`](docs/dependency-model.md) ·
+  [`docs/policy-engine.md`](docs/policy-engine.md) ·
+  [`docs/application-expansion.md`](docs/application-expansion.md) ·
+  [`docs/security.md`](docs/security.md) ·
+  [`docs/development.md`](docs/development.md) ·
+  [`docs/demo.md`](docs/demo.md) · [`docs/roadmap.md`](docs/roadmap.md)
+- **96 tests** (parser, dependency graph, risk engine incl. the 8
+  required scenarios, policy engine, persistence, CLI, REST API,
+  security) -- `pytest tests/unit/change_risk_engine tests/integration/change_risk_engine`.
+- **What's real vs. simulated in this build environment**: the entire
+  pipeline, REST API, CLI, and web UI are real and tested; the
+  PostgreSQL metadata connector and Postgres-backed persistence are
+  written and reviewed but not exercised against a live server here (no
+  reachable PostgreSQL server or Docker daemon in this build
+  environment) -- see [`docs/database-analysis.md`](docs/database-analysis.md)
+  for the exact accounting, the same honesty standard as this repo's own
+  AWS path above.
+
 ## Repository structure
 
 ```
 src/dbre_platform/     The platform itself: config, policy, tagging, readiness,
                         postgres (standards + RBAC), provisioning (local + k3s + AWS),
                         audit, observability, slo, capacity, backup, cli
-policies/               Data-driven policy rules (environments, tagging, naming, readiness)
+src/change_risk_engine/ The Change Risk Engine: domain, analyzers, connectors,
+                        dependencies, blast_radius, risk, policy, ai, reports,
+                        persistence, api, web, cli -- see docs/development.md
+policies/               Data-driven policy rules (environments, tagging, naming, readiness,
+                        + risk/ for the Change Risk Engine's own factor weights + rules)
 terraform/              Reusable RDS PostgreSQL module + dev/prod environments
 k8s/                    K3s mode: CNPG operator install + generated reference Cluster manifests
 ansible/                A complementary automation path applying the same standards
 postgres/               (see src/dbre_platform/postgres/templates -- SQL/Jinja2)
 monitoring/             Vendor-neutral dashboard JSON (generated) + SLO burn-rate alerts
 automation/             Scripts that regenerate generated artifacts (schema, dashboards, k8s refs)
-tests/{unit,policy,integration}/   129 tests; integration tests need a real PostgreSQL server
+tests/{unit,policy,integration}/   255 tests; integration tests need a real PostgreSQL server
+                        (dbre_platform) or none (change_risk_engine, see docs/demo.md)
 examples/               Request YAML fixtures (dev/staging/k3s/prod-compliant/prod-noncompliant)
                         + a capacity-history CSV
 schemas/                Generated JSON Schema for the request format
-docs/                   Architecture, DBRE principles, per-topic deep dives, ADRs
+docs/                   Architecture, DBRE principles, per-topic deep dives, ADRs,
+                        + the Change Risk Engine's own doc set (see above)
 .github/workflows/      CI (lint/type/test), Security (secrets/deps/SAST/Terraform), K8s manifests
 ```
 
 ## Architecture decisions -- the why
 
-Rather than assert good judgment, this repository documents it. Seven
+Rather than assert good judgment, this repository documents it. Eight
 architecture decision records explain specific, sometimes non-obvious
 choices and the trade-offs behind them:
 
@@ -255,6 +340,11 @@ choices and the trade-offs behind them:
   runs PostgreSQL via the CloudNativePG operator (not a hand-rolled
   StatefulSet), so replication and failover are real rather than
   caveated.
+- [ADR 0008](docs/decisions/0008-change-risk-engine-domain-separation.md)
+  -- the Change Risk Engine is a separate domain (`change_risk_engine`,
+  no import dependency on `dbre_platform`), packaged in the same
+  repository/distribution -- and why that split, not one module tree or
+  two repositories.
 
 For the broader design reasoning -- why policy is data, why gates fail
 closed, why nothing here claims to be more finished than it is -- see
@@ -302,6 +392,15 @@ value the moment it fakes something. So, plainly:
   module docstrings -- see
   [`dbre_platform/provisioning/aws_rds.py`](src/dbre_platform/provisioning/aws_rds.py)
   and [`dbre_platform/backup/aws_backup.py`](src/dbre_platform/backup/aws_backup.py).
+- **Change Risk Engine -- real and tested**: the SQL parser, the full
+  analyzer → dependency graph → blast radius → risk engine → policy
+  engine → report pipeline, the REST API, the CLI, and the web UI, all
+  against fixtures matching the exact shape a live connector returns.
+  **Written and reviewed, not exercised against a live server here**:
+  `PostgresConnector`'s catalog queries and `PostgresAssessmentStore`
+  (no reachable PostgreSQL server or Docker daemon in this build
+  environment). Full accounting:
+  [`docs/database-analysis.md`](docs/database-analysis.md).
 
 Full accounting: [`docs/local-vs-aws.md`](docs/local-vs-aws.md).
 
